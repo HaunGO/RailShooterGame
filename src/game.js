@@ -1,6 +1,12 @@
 import * as THREE from 'three'
 import { InputManager } from './input.js'
-import { createPlayer, createProjectile } from './entities.js'
+import { createPlayer } from './entities.js'
+import { createEnvironment, updateEnvironment } from './systems/environment.js'
+import { createReticleSystem } from './systems/reticle.js'
+import { updateTargets } from './systems/targets.js'
+import { tryFireProjectile, updateProjectiles } from './systems/projectiles.js'
+import { createEffectsSystem } from './systems/effects.js'
+import { handleProjectileTargetCollisions, handleTargetShipCollisions } from './systems/collisions.js'
 
 export function initGame({ container, toggleMouseButton, tuning }) {
   const debugEl = document.querySelector('#debug')
@@ -54,28 +60,7 @@ export function initGame({ container, toggleMouseButton, tuning }) {
   scene.add(new THREE.HemisphereLight(0xbad3ff, 0x203050, 0.45))
 
   // Simple "fly through" floor segments for motion cues.
-  const env = new THREE.Group()
-  scene.add(env)
-
-  const floorY = -2
-  const segmentLength = 40
-  const segmentCount = 10
-  const floorWidth = 28
-  const floorSegments = []
-
-  for (let i = 0; i < segmentCount; i += 1) {
-    const mat = new THREE.MeshStandardMaterial({
-      color: i % 2 === 0 ? 0x141c33 : 0x10182d,
-      roughness: 1,
-      metalness: 0,
-      flatShading: true,
-    })
-    const seg = new THREE.Mesh(new THREE.PlaneGeometry(floorWidth, segmentLength, 1, 1), mat)
-    seg.rotation.x = -Math.PI / 2
-    seg.position.set(0, floorY, i * segmentLength)
-    env.add(seg)
-    floorSegments.push(seg)
-  }
+  const envState = createEnvironment(scene)
 
   const player = createPlayer()
   player.group.position.set(0, 0, 0)
@@ -94,7 +79,7 @@ export function initGame({ container, toggleMouseButton, tuning }) {
   }
   const bounds = { x: 7.5, y: 7.0 }
   const groundClearance = 0.4
-  const minY = floorY + groundClearance
+  const minY = envState.floorY + groundClearance
   const baseSpeedX = 3.0 // units/sec
   const baseSpeedY = 3.0 // units/sec
   const forwardSpeed = 12 // units/sec (auto-forward rail)
@@ -102,11 +87,24 @@ export function initGame({ container, toggleMouseButton, tuning }) {
   const projectileCooldown = 0.12
   let fireCooldown = 0
   const projectiles = []
+  const targets = []
+  let targetSpawnTimer = 0
+  let playerHitTimer = 0
+  const playerHitInvuln = 0.6
+  // Approximate the paper-airplane shape with multiple spheres in ship-local space.
+  const shipHitSpheres = [
+    { offset: new THREE.Vector3(0, 0.1, 1.6), radius: 0.55 }, // nose
+    { offset: new THREE.Vector3(0, 0.15, 0.3), radius: 0.9 }, // center mass
+    { offset: new THREE.Vector3(0, 0.12, -1.0), radius: 0.65 }, // tail
+    { offset: new THREE.Vector3(-1.4, 0.0, 0.7), radius: 0.6 }, // left wing
+    { offset: new THREE.Vector3(1.4, 0.0, 0.7), radius: 0.6 }, // right wing
+  ]
+  const tmpSphereCenter = new THREE.Vector3()
+  const tmpToTarget = new THREE.Vector3()
 
   const reticleEl = document.querySelector('#reticle')
-  const tmpForward = new THREE.Vector3()
-  const tmpPoint = new THREE.Vector3()
-  const tmpNdc = new THREE.Vector3()
+  const updateReticle = createReticleSystem(renderer, camera)
+  const effects = createEffectsSystem(scene)
 
   const tuningState = {
     speedX: baseSpeedX,
@@ -166,12 +164,26 @@ export function initGame({ container, toggleMouseButton, tuning }) {
       player.group.position.y = THREE.MathUtils.clamp(player.group.position.y, minY, bounds.y)
 
       // Recycle floor segments to stay ahead of the ship.
-      const wrapBehindZ = player.group.position.z - segmentLength
-      for (let i = 0; i < floorSegments.length; i += 1) {
-        const seg = floorSegments[i]
-        if (seg.position.z < wrapBehindZ) {
-          seg.position.z += segmentLength * segmentCount
-        }
+      updateEnvironment(envState, player.group.position.z)
+
+      // Spawn simple targets ahead of the ship.
+      targetSpawnTimer = updateTargets({
+        targets,
+        scene,
+        bounds,
+        minY,
+        playerZ: player.group.position.z,
+        dt,
+        targetSpawnTimer,
+      })
+
+      // Player flicker on hit (visual feedback only).
+      playerHitTimer = Math.max(0, playerHitTimer - dt)
+      if (playerHitTimer > 0) {
+        const flicker = Math.floor(playerHitTimer * 30) % 2 === 0
+        player.group.visible = flicker
+      } else {
+        player.group.visible = true
       }
 
       // Orientation: make the ship "point" where you're aiming/steering.
@@ -194,60 +206,48 @@ export function initGame({ container, toggleMouseButton, tuning }) {
       player.group.rotation.z = THREE.MathUtils.lerp(player.group.rotation.z, targetRoll, rotLerp)
 
       // Reticle = ship boresight (nose direction) projected to screen.
-      if (reticleEl) {
-        const rect = renderer.domElement.getBoundingClientRect()
-        const halfW = rect.width / 2
-        const halfH = rect.height / 2
-
-        tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
-        tmpPoint.copy(player.group.position).addScaledVector(tmpForward, 25) // "where the nose points"
-
-        tmpNdc.copy(tmpPoint).project(camera) // NDC: x,y in [-1,1], z in [-1,1]
-        const padding = 12
-
-        // If boresight is behind camera, hide reticle.
-        if (tmpNdc.z < -1 || tmpNdc.z > 1) {
-          reticleEl.style.opacity = '0'
-        } else {
-          reticleEl.style.opacity = '1'
-          let xPx = tmpNdc.x * halfW
-          let yPx = -tmpNdc.y * halfH
-          xPx = THREE.MathUtils.clamp(xPx, -halfW + padding, halfW - padding)
-          yPx = THREE.MathUtils.clamp(yPx, -halfH + padding, halfH - padding)
-          reticleEl.style.transform = `translate(calc(-50% + ${xPx}px), calc(-50% + ${yPx}px))`
-        }
-      }
+      updateReticle(reticleEl, player)
 
       // Fire (space)
       fireCooldown = Math.max(0, fireCooldown - dt)
-      if (state.fire.pressed && fireCooldown <= 0) {
-        const proj = createProjectile(false)
-        proj.mesh.position.copy(player.group.position)
-        proj.mesh.position.z += 2.2
-        // Shoot along the ship's current forward direction.
-        const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
-        // Add rail speed so bullets always move forward relative to the ship.
-        proj.velocity = forward.multiplyScalar(projectileSpeed + forwardSpeed)
-        scene.add(proj.mesh)
-        projectiles.push(proj)
-        fireCooldown = projectileCooldown
-      }
+      fireCooldown = tryFireProjectile({
+        state,
+        fireCooldown,
+        projectileCooldown,
+        projectileSpeed,
+        forwardSpeed,
+        player,
+        projectiles,
+        scene,
+      })
 
       // Update projectiles (forward +Z)
-      for (let i = projectiles.length - 1; i >= 0; i -= 1) {
-        const p = projectiles[i]
-        if (p.velocity) {
-          p.mesh.position.x += p.velocity.x * dt
-          p.mesh.position.y += p.velocity.y * dt
-          p.mesh.position.z += p.velocity.z * dt
-        } else {
-          p.mesh.position.z += projectileSpeed * dt
-        }
-        if (p.mesh.position.z > player.group.position.z + 120) {
-          scene.remove(p.mesh)
-          projectiles.splice(i, 1)
-        }
-      }
+      updateProjectiles({
+        projectiles,
+        scene,
+        dt,
+        playerZ: player.group.position.z,
+        projectileSpeed,
+      })
+
+      // Projectile vs target collisions (simple radius check).
+      handleProjectileTargetCollisions({ targets, projectiles, scene, effects })
+
+      // Target hits ship (multi-sphere). Despawn target + flicker ship + impact flash.
+      playerHitTimer = handleTargetShipCollisions({
+        targets,
+        scene,
+        player,
+        shipHitSpheres,
+        tmpSphereCenter,
+        tmpToTarget,
+        playerHitTimer,
+        playerHitInvuln,
+        effects,
+      })
+
+      // Update explosions.
+      effects.update(dt)
 
       // (bank/pitch handled above in the "Orientation" block)
 
