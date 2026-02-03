@@ -25,6 +25,9 @@ export class InputManager {
     this.pointerDown = false
     this.touchSteer = { x: 0, y: 0 }
     this.touchFireHeld = false
+    this.mouseAim = { x: 0, y: 0 }
+    this.mouseActive = false
+    this.mouseEnabled = true
     this.prevState = this._emptyState()
     this.state = this._emptyState()
 
@@ -52,12 +55,48 @@ export class InputManager {
       this.pointerDown = false
     })
 
+    // Mouse-driven steering/aiming (cursor position relative to canvas center).
+    this.canvas.addEventListener('pointerenter', (event) => {
+      if (!this.mouseEnabled) return
+      if (event.pointerType === 'mouse') this.mouseActive = true
+    })
+    this.canvas.addEventListener('pointerleave', (event) => {
+      if (event.pointerType === 'mouse') {
+        this.mouseActive = false
+        this.mouseAim.x = 0
+        this.mouseAim.y = 0
+      }
+    })
+    this.canvas.addEventListener('pointermove', (event) => {
+      if (event.pointerType !== 'mouse') return
+      if (!this.mouseEnabled) return
+      const rect = this.canvas.getBoundingClientRect()
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top + rect.height / 2
+      const halfW = Math.max(1, rect.width / 2)
+      const halfH = Math.max(1, rect.height / 2)
+      this.mouseAim.x = this._clampAxis((event.clientX - cx) / halfW)
+      this.mouseAim.y = this._clampAxis((event.clientY - cy) / halfH)
+      this.mouseActive = true
+    })
+
     this._initTouch()
+  }
+
+  setMouseEnabled(enabled) {
+    this.mouseEnabled = Boolean(enabled)
+    if (!this.mouseEnabled) {
+      this.mouseActive = false
+      this.mouseAim.x = 0
+      this.mouseAim.y = 0
+    }
   }
 
   _emptyState() {
     return {
       steer: { x: 0, y: 0 },
+      aim: { x: 0, y: 0 },
+      usingMouseAim: false,
       fire: { held: false, pressed: false, released: false },
       boost: { held: false, pressed: false, released: false },
       brake: { held: false, pressed: false, released: false },
@@ -139,8 +178,15 @@ export class InputManager {
     const padX = pad ? this._applyDeadzone(pad.axes[0]) : 0
     const padY = pad ? this._applyDeadzone(pad.axes[1]) : 0
 
-    state.steer.x = this._clampAxis(keyboardX + padX + this.touchSteer.x)
-    state.steer.y = this._clampAxis(keyboardY + padY + this.touchSteer.y)
+    const usingMouse = this.mouseEnabled && this.mouseActive
+    const mouseX = usingMouse ? this.mouseAim.x : 0
+    const mouseY = usingMouse ? this.mouseAim.y : 0
+
+    state.steer.x = this._clampAxis(keyboardX + padX + this.touchSteer.x + mouseX)
+    state.steer.y = this._clampAxis(keyboardY + padY + this.touchSteer.y + mouseY)
+    state.aim.x = usingMouse ? this.mouseAim.x : state.steer.x
+    state.aim.y = usingMouse ? this.mouseAim.y : state.steer.y
+    state.usingMouseAim = usingMouse
 
     const fireHeld =
       this.pointerDown ||

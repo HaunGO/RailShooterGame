@@ -40,6 +40,53 @@ canvas {
   z-index: 10;
 }
 
+#toggle-mouse {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  pointer-events: auto;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(231, 238, 249, 0.25);
+  background: rgba(6, 10, 20, 0.6);
+  color: rgba(231, 238, 249, 0.9);
+  font: inherit;
+  cursor: pointer;
+}
+
+#toggle-mouse:hover {
+  border-color: rgba(231, 238, 249, 0.45);
+}
+
+#tuning {
+  position: absolute;
+  left: 16px;
+  top: 52px;
+  width: 260px;
+  pointer-events: auto;
+  padding: 10px 12px;
+  background: rgba(6, 10, 20, 0.6);
+  border: 1px solid rgba(231, 238, 249, 0.2);
+  border-radius: 10px;
+}
+
+.tuning-row {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.tuning-row label {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(231, 238, 249, 0.85);
+  font-size: 12px;
+}
+
+.tuning-row input[type='range'] {
+  width: 100%;
+}
+
 #reticle {
   position: absolute;
   left: 50%;
