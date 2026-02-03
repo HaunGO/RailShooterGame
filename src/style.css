@@ -1,0 +1,129 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+  color: #e7eef9;
+  background-color: #0a0f1f;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: 14px;
+  z-index: 10;
+}
+
+#reticle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(231, 238, 249, 0.6);
+  border-radius: 50%;
+}
+
+#score {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  padding: 6px 10px;
+  background: rgba(6, 10, 20, 0.6);
+  border: 1px solid rgba(231, 238, 249, 0.2);
+  border-radius: 8px;
+}
+
+#instructions {
+  position: absolute;
+  right: 16px;
+  top: 12px;
+  padding: 8px 12px;
+  background: rgba(6, 10, 20, 0.6);
+  border: 1px solid rgba(231, 238, 249, 0.2);
+  border-radius: 8px;
+  text-align: right;
+  line-height: 1.4;
+  max-width: 260px;
+}
+
+#debug {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  padding: 6px 10px;
+  background: rgba(6, 10, 20, 0.6);
+  border: 1px solid rgba(231, 238, 249, 0.2);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  color: rgba(231, 238, 249, 0.85);
+}
+
+#instructions strong {
+  font-weight: 600;
+}
+
+#touch-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.touch-zone {
+  position: absolute;
+  bottom: 18px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 1px solid rgba(231, 238, 249, 0.2);
+  background: rgba(10, 15, 31, 0.35);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#touch-stick {
+  left: 18px;
+}
+
+#touch-fire {
+  right: 18px;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #touch-controls {
+    display: none;
+  }
+}
