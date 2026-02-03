@@ -6,19 +6,19 @@ app.innerHTML = `
   <div id="hud">
     <div id="reticle"></div>
     <div id="debug"></div>
-    <button id="toggle-mouse" type="button">Mouse Aim: On</button>
+    <button id="toggle-mouse" type="button">Mouse Aim: Off</button>
     <div id="tuning">
       <div class="tuning-row">
-        <label for="speed-x">Strafe speed <span id="speed-x-val">7.5</span></label>
-        <input id="speed-x" type="range" min="2" max="14" step="0.5" value="7.5" />
+        <label for="speed-x">Strafe speed <span id="speed-x-val">3.0</span></label>
+        <input id="speed-x" type="range" min="1" max="10" step="0.1" value="3.0" />
       </div>
       <div class="tuning-row">
-        <label for="speed-y">Vertical speed <span id="speed-y-val">7.5</span></label>
-        <input id="speed-y" type="range" min="1" max="14" step="0.5" value="7.5" />
+        <label for="speed-y">Vertical speed <span id="speed-y-val">3.0</span></label>
+        <input id="speed-y" type="range" min="1" max="10" step="0.1" value="3.0" />
       </div>
       <div class="tuning-row">
-        <label for="turn-response">Turn response <span id="turn-response-val">0.07</span></label>
-        <input id="turn-response" type="range" min="0.03" max="0.18" step="0.01" value="0.07" />
+        <label for="turn-response">Turn response <span id="turn-response-val">3.0</span></label>
+        <input id="turn-response" type="range" min="1" max="10" step="0.1" value="3.0" />
       </div>
     </div>
     <div id="instructions">
