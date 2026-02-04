@@ -7,8 +7,9 @@ import { updateTargets } from './systems/targets.js'
 import { tryFireProjectile, updateProjectiles } from './systems/projectiles.js'
 import { createEffectsSystem } from './systems/effects.js'
 import { handleProjectileTargetCollisions, handleTargetShipCollisions } from './systems/collisions.js'
+import { createScoreSystem } from './systems/score.js'
 
-export function initGame({ container, toggleMouseButton, tuning }) {
+export function initGame({ container, toggleMouseButton, tuning, score }) {
   const debugEl = document.querySelector('#debug')
   const debugEnabled = new URLSearchParams(window.location.search).has('debug')
   if (debugEl && !debugEnabled) debugEl.style.display = 'none'
@@ -77,12 +78,14 @@ export function initGame({ container, toggleMouseButton, tuning }) {
       toggleMouseButton.textContent = mouseAimEnabled ? 'Mouse Aim: On' : 'Mouse Aim: Off'
     })
   }
-  const bounds = { x: 7.5, y: 7.0 }
+  const bounds = { x: 15.75, y: 7.0 }
   const groundClearance = 0.4
   const minY = envState.floorY + groundClearance
-  const baseSpeedX = 3.0 // units/sec
-  const baseSpeedY = 3.0 // units/sec
+  const baseSpeedX = 6.0 // units/sec
+  const baseSpeedY = 6.0 // units/sec
   const forwardSpeed = 12 // units/sec (auto-forward rail)
+  const boostMultiplier = 1.6
+  const brakeMultiplier = 0.6
   const projectileSpeed = 35
   const projectileCooldown = 0.12
   let fireCooldown = 0
@@ -91,6 +94,13 @@ export function initGame({ container, toggleMouseButton, tuning }) {
   let targetSpawnTimer = 0
   let playerHitTimer = 0
   const playerHitInvuln = 0.6
+  let barrelRollTimer = 0
+  let barrelRollDir = 0
+  let barrelRollStartZ = 0
+  let barrelRollCooldown = 0
+  const barrelRollDuration = 1.0
+  const barrelRollCooldownTime = 0.25
+  const baseRollStrafeMultiplier = 1.6
   // Approximate the paper-airplane shape with multiple spheres in ship-local space.
   const shipHitSpheres = [
     { offset: new THREE.Vector3(0, 0.1, 1.6), radius: 0.55 }, // nose
@@ -105,12 +115,15 @@ export function initGame({ container, toggleMouseButton, tuning }) {
   const reticleEl = document.querySelector('#reticle')
   const updateReticle = createReticleSystem(renderer, camera)
   const effects = createEffectsSystem(scene)
+  const scoreSystem = createScoreSystem(score ?? {})
+  const shipVelocity = new THREE.Vector3()
 
   const tuningState = {
     speedX: baseSpeedX,
     speedY: baseSpeedY,
     // UI scale 1..10. We'll map it to an internal lerp factor.
     turnResponse: 3.0,
+    rollStrafeMultiplier: baseRollStrafeMultiplier,
   }
 
   if (tuning?.speedX) {
@@ -137,6 +150,14 @@ export function initGame({ container, toggleMouseButton, tuning }) {
     tuning.turnResponse.addEventListener('input', sync)
     sync()
   }
+  if (tuning?.rollStrafe) {
+    const sync = () => {
+      tuningState.rollStrafeMultiplier = Number(tuning.rollStrafe.value)
+      if (tuning.rollStrafeVal) tuning.rollStrafeVal.textContent = tuningState.rollStrafeMultiplier.toFixed(1)
+    }
+    tuning.rollStrafe.addEventListener('input', sync)
+    sync()
+  }
 
   let frame = 0
   let last = performance.now()
@@ -155,9 +176,19 @@ export function initGame({ container, toggleMouseButton, tuning }) {
       const xInput = -steer.x
       // Y: keyboard/gamepad are "flight inverted", mouse is "screen direct".
       const yInput = usingMouseAim ? -steer.y : steer.y
-      player.group.position.x += xInput * tuningState.speedX * dt
-      player.group.position.y += yInput * tuningState.speedY * dt
-      player.group.position.z += forwardSpeed * dt
+      const speedScale = state.boost.held ? boostMultiplier : state.brake.held ? brakeMultiplier : 1
+      const rollStrafe =
+        barrelRollTimer > 0 && barrelRollDir !== 0
+          ? tuningState.rollStrafeMultiplier * -barrelRollDir
+          : 0
+      shipVelocity.set(
+        xInput * tuningState.speedX + rollStrafe * tuningState.speedX,
+        yInput * tuningState.speedY,
+        forwardSpeed * speedScale
+      )
+      player.group.position.x += shipVelocity.x * dt
+      player.group.position.y += shipVelocity.y * dt
+      player.group.position.z += shipVelocity.z * dt
 
       player.group.position.x = THREE.MathUtils.clamp(player.group.position.x, -bounds.x, bounds.x)
       // Treat the floor as solid ground (can't go below it).
@@ -201,9 +232,38 @@ export function initGame({ container, toggleMouseButton, tuning }) {
       // Bank into the turn (move right => clockwise bank on screen).
       const targetRoll = -xInput * rollMax
 
+      // Barrel roll (Shift + Left/Right).
+      barrelRollCooldown = Math.max(0, barrelRollCooldown - dt)
+      if (barrelRollTimer <= 0 && barrelRollCooldown <= 0 && state.roll.held) {
+        if (state.steer.x <= -0.6) {
+          barrelRollTimer = barrelRollDuration
+          barrelRollDir = -1
+          barrelRollStartZ = player.group.rotation.z
+          barrelRollCooldown = barrelRollCooldownTime
+        } else if (state.steer.x >= 0.6) {
+          barrelRollTimer = barrelRollDuration
+          barrelRollDir = 1
+          barrelRollStartZ = player.group.rotation.z
+          barrelRollCooldown = barrelRollCooldownTime
+        }
+      }
+      if (barrelRollTimer > 0) {
+        barrelRollTimer = Math.max(0, barrelRollTimer - dt)
+      }
+      const rollPhase = barrelRollTimer > 0 ? 1 - barrelRollTimer / barrelRollDuration : 0
+      const easedPhase = rollPhase * rollPhase * (3 - 2 * rollPhase)
+      // Full roll = 360° rotation.
+      const barrelRollOffset = barrelRollTimer > 0 ? barrelRollDir * easedPhase * Math.PI * 2 : 0
+
       player.group.rotation.y = THREE.MathUtils.lerp(player.group.rotation.y, targetYaw, rotLerp)
       player.group.rotation.x = THREE.MathUtils.lerp(player.group.rotation.x, targetPitch, rotLerp)
-      player.group.rotation.z = THREE.MathUtils.lerp(player.group.rotation.z, targetRoll, rotLerp)
+      if (barrelRollTimer > 0) {
+        player.group.rotation.z = barrelRollStartZ + barrelRollOffset
+      } else {
+        const wrapped = ((player.group.rotation.z % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+        const nearest = wrapped > Math.PI ? wrapped - Math.PI * 2 : wrapped
+        player.group.rotation.z = THREE.MathUtils.lerp(nearest, targetRoll, rotLerp)
+      }
 
       // Reticle = ship boresight (nose direction) projected to screen.
       updateReticle(reticleEl, player)
@@ -215,7 +275,6 @@ export function initGame({ container, toggleMouseButton, tuning }) {
         fireCooldown,
         projectileCooldown,
         projectileSpeed,
-        forwardSpeed,
         player,
         projectiles,
         scene,
@@ -231,10 +290,16 @@ export function initGame({ container, toggleMouseButton, tuning }) {
       })
 
       // Projectile vs target collisions (simple radius check).
-      handleProjectileTargetCollisions({ targets, projectiles, scene, effects })
+      handleProjectileTargetCollisions({
+        targets,
+        projectiles,
+        scene,
+        effects,
+        onHit: () => scoreSystem.addHit(10),
+      })
 
       // Target hits ship (multi-sphere). Despawn target + flicker ship + impact flash.
-      playerHitTimer = handleTargetShipCollisions({
+      const shipHit = handleTargetShipCollisions({
         targets,
         scene,
         player,
@@ -245,6 +310,8 @@ export function initGame({ container, toggleMouseButton, tuning }) {
         playerHitInvuln,
         effects,
       })
+      playerHitTimer = shipHit.playerHitTimer
+      if (shipHit.hit) scoreSystem.resetCombo()
 
       // Update explosions.
       effects.update(dt)

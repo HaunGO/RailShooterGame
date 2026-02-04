@@ -8,7 +8,6 @@ export function tryFireProjectile({
   fireCooldown,
   projectileCooldown,
   projectileSpeed,
-  forwardSpeed,
   player,
   projectiles,
   scene,
@@ -19,7 +18,8 @@ export function tryFireProjectile({
     proj.mesh.position.copy(player.group.position)
     proj.mesh.position.z += 2.2
     tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
-    proj.velocity = tmpForward.multiplyScalar(projectileSpeed + forwardSpeed)
+    // Snapshot heading at fire time; bullets fly straight thereafter.
+    proj.velocity = tmpForward.clone().multiplyScalar(projectileSpeed)
     scene.add(proj.mesh)
     projectiles.push(proj)
     cooldown = projectileCooldown

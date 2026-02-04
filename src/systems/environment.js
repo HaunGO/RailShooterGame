@@ -7,7 +7,7 @@ export function createEnvironment(scene) {
   const floorY = -2
   const segmentLength = 40
   const segmentCount = 10
-  const floorWidth = 28
+  const floorWidth = 36
   const floorSegments = []
 
   for (let i = 0; i < segmentCount; i += 1) {

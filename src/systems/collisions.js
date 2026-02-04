@@ -1,4 +1,4 @@
-export function handleProjectileTargetCollisions({ targets, projectiles, scene, effects }) {
+export function handleProjectileTargetCollisions({ targets, projectiles, scene, effects, onHit }) {
   for (let i = targets.length - 1; i >= 0; i -= 1) {
     const t = targets[i]
     for (let j = projectiles.length - 1; j >= 0; j -= 1) {
@@ -9,6 +9,7 @@ export function handleProjectileTargetCollisions({ targets, projectiles, scene, 
         targets.splice(i, 1)
         projectiles.splice(j, 1)
         effects.addExplosion(t.mesh.position, { color: 0xfff1a6, radius: 0.6 })
+        if (onHit) onHit(t)
         break
       }
     }
@@ -26,7 +27,7 @@ export function handleTargetShipCollisions({
   playerHitInvuln,
   effects,
 }) {
-  if (playerHitTimer > 0) return playerHitTimer
+  if (playerHitTimer > 0) return { playerHitTimer, hit: false }
 
   for (let i = targets.length - 1; i >= 0; i -= 1) {
     const t = targets[i]
@@ -54,9 +55,9 @@ export function handleTargetShipCollisions({
       scene.remove(t.mesh)
       targets.splice(i, 1)
       effects.addExplosion(impactPoint ?? player.group.position, { color: 0xff6b6b, radius: 0.8 })
-      return playerHitInvuln
+      return { playerHitTimer: playerHitInvuln, hit: true }
     }
   }
 
-  return playerHitTimer
+  return { playerHitTimer, hit: false }
 }
