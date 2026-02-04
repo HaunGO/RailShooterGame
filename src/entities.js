@@ -4,8 +4,8 @@ export function createPlayer() {
   const group = new THREE.Group()
 
   const material = new THREE.MeshStandardMaterial({
-    color: 0x55ff77,
-    emissive: 0x0d2a14,
+    color: 0x5b6fe6,
+    emissive: 0x141b3d,
     emissiveIntensity: 0.35,
     roughness: 0.95,
     metalness: 0.0,

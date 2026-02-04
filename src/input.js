@@ -28,6 +28,9 @@ export class InputManager {
     this.mouseAim = { x: 0, y: 0 }
     this.mouseActive = false
     this.mouseEnabled = true
+    this.mouseMode = 'normal'
+    this.mouseSensitivity = 1.0
+    this.directSensitivity = 10.0
     this.prevState = this._emptyState()
     this.state = this._emptyState()
 
@@ -89,6 +92,25 @@ export class InputManager {
       this.mouseActive = false
       this.mouseAim.x = 0
       this.mouseAim.y = 0
+    }
+  }
+
+  setMouseMode(mode) {
+    if (mode === 'off') {
+      this.mouseSensitivity = 0
+      this.setMouseEnabled(false)
+      this.mouseMode = 'off'
+      return
+    }
+    this.setMouseEnabled(true)
+    this.mouseMode = mode
+    this.mouseSensitivity = mode === 'direct' ? this.directSensitivity : 1.0
+  }
+
+  setMouseDirectSensitivity(value) {
+    this.directSensitivity = value
+    if (this.mouseMode === 'direct') {
+      this.mouseSensitivity = value
     }
   }
 
@@ -179,8 +201,8 @@ export class InputManager {
     const padY = pad ? this._applyDeadzone(pad.axes[1]) : 0
 
     const usingMouse = this.mouseEnabled && this.mouseActive
-    const mouseX = usingMouse ? this.mouseAim.x : 0
-    const mouseY = usingMouse ? this.mouseAim.y : 0
+    const mouseX = usingMouse ? this.mouseAim.x * this.mouseSensitivity : 0
+    const mouseY = usingMouse ? this.mouseAim.y * this.mouseSensitivity : 0
 
     state.steer.x = this._clampAxis(keyboardX + padX + this.touchSteer.x + mouseX)
     state.steer.y = this._clampAxis(keyboardY + padY + this.touchSteer.y + mouseY)

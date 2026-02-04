@@ -3,17 +3,27 @@ import { InputManager } from './input.js'
 import { createPlayer } from './entities.js'
 import { createEnvironment, updateEnvironment } from './systems/environment.js'
 import { createReticleSystem } from './systems/reticle.js'
-import { updateTargets } from './systems/targets.js'
+import { attachTargetHitbox, updateTargets } from './systems/targets.js'
 import { tryFireProjectile, updateProjectiles } from './systems/projectiles.js'
 import { createEffectsSystem } from './systems/effects.js'
 import { handleProjectileTargetCollisions, handleTargetShipCollisions } from './systems/collisions.js'
 import { createScoreSystem } from './systems/score.js'
 
-export function initGame({ container, toggleMouseButton, tuning, score }) {
+export function initGame({
+  container,
+  toggleMouseButton,
+  toggleHitboxesButton,
+  toggleShadowsButton,
+  toggleLevelMeshButton,
+  toggleDebugButton,
+  tuning,
+  score,
+}) {
   const debugEl = document.querySelector('#debug')
-  const debugEnabled = new URLSearchParams(window.location.search).has('debug')
-  if (debugEl && !debugEnabled) debugEl.style.display = 'none'
-  if (debugEl && debugEnabled) debugEl.textContent = 'starting…'
+  let debugEnabled = false
+  if (debugEl) {
+    debugEl.style.display = 'none'
+  }
 
   // Ensure the host container actually has a size.
   container.style.position = 'relative'
@@ -68,24 +78,28 @@ export function initGame({ container, toggleMouseButton, tuning, score }) {
   scene.add(player.group)
 
   const input = new InputManager({ canvas: renderer.domElement, touchStick: null, touchFire: null })
-  let mouseAimEnabled = false
-  input.setMouseEnabled(mouseAimEnabled)
+  let mouseMode = 'off'
+  input.setMouseMode(mouseMode)
   if (toggleMouseButton) {
-    toggleMouseButton.textContent = mouseAimEnabled ? 'Mouse Aim: On' : 'Mouse Aim: Off'
+    const updateLabel = () => {
+      toggleMouseButton.textContent =
+        mouseMode === 'off' ? 'Mouse Aim: Off' : mouseMode === 'direct' ? 'Mouse Aim: Direct' : 'Mouse Aim: On'
+    }
+    updateLabel()
     toggleMouseButton.addEventListener('click', () => {
-      mouseAimEnabled = !mouseAimEnabled
-      input.setMouseEnabled(mouseAimEnabled)
-      toggleMouseButton.textContent = mouseAimEnabled ? 'Mouse Aim: On' : 'Mouse Aim: Off'
+      mouseMode = mouseMode === 'off' ? 'normal' : mouseMode === 'normal' ? 'direct' : 'off'
+      input.setMouseMode(mouseMode)
+      updateLabel()
     })
   }
-  const bounds = { x: 15.75, y: 7.0 }
+  const bounds = { x: 15.75, y: 10.5 }
   const groundClearance = 0.4
   const minY = envState.floorY + groundClearance
   const baseSpeedX = 6.0 // units/sec
   const baseSpeedY = 6.0 // units/sec
   const forwardSpeed = 12 // units/sec (auto-forward rail)
-  const boostMultiplier = 1.6
-  const brakeMultiplier = 0.6
+  const boostMultiplier = 4.0
+  const brakeMultiplier = 0.1
   const projectileSpeed = 35
   const projectileCooldown = 0.12
   let fireCooldown = 0
@@ -117,6 +131,141 @@ export function initGame({ container, toggleMouseButton, tuning, score }) {
   const effects = createEffectsSystem(scene)
   const scoreSystem = createScoreSystem(score ?? {})
   const shipVelocity = new THREE.Vector3()
+  let hitboxesEnabled = false
+  let shadowsEnabled = true
+  const shadowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    opacity: 0.28,
+  })
+
+  const shipHitboxGroup = new THREE.Group()
+  for (let i = 0; i < shipHitSpheres.length; i += 1) {
+    const sphere = shipHitSpheres[i]
+    const hb = new THREE.Mesh(
+      new THREE.SphereGeometry(sphere.radius, 10, 10),
+      new THREE.MeshBasicMaterial({
+        color: 0x2a8f86,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.3,
+      })
+    )
+    hb.position.copy(sphere.offset)
+    shipHitboxGroup.add(hb)
+  }
+  shipHitboxGroup.visible = hitboxesEnabled
+  player.group.add(shipHitboxGroup)
+
+  const refreshTargetHitboxes = () => {
+    for (let i = 0; i < targets.length; i += 1) {
+      const t = targets[i]
+      if (hitboxesEnabled) {
+        attachTargetHitbox(t)
+        t.hitbox.visible = true
+      } else if (t.hitbox) {
+        t.hitbox.visible = false
+      }
+    }
+  }
+
+  if (toggleHitboxesButton) {
+    toggleHitboxesButton.textContent = hitboxesEnabled ? 'Hitboxes: On' : 'Hitboxes: Off'
+    toggleHitboxesButton.addEventListener('click', () => {
+      hitboxesEnabled = !hitboxesEnabled
+      shipHitboxGroup.visible = hitboxesEnabled
+      refreshTargetHitboxes()
+      toggleHitboxesButton.textContent = hitboxesEnabled ? 'Hitboxes: On' : 'Hitboxes: Off'
+    })
+  }
+
+  const playerShadow = new THREE.Mesh(new THREE.CircleGeometry(1.1, 20), shadowMaterial)
+  playerShadow.rotation.x = -Math.PI / 2
+  playerShadow.visible = shadowsEnabled
+  scene.add(playerShadow)
+
+  let levelMeshEnabled = true
+  const levelWidth = 80
+  const levelSegments = []
+  for (let i = 0; i < envState.segmentCount; i += 1) {
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(levelWidth, envState.segmentLength, 1, 1),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 })
+    )
+    plane.rotation.x = -Math.PI / 2
+    plane.position.set(0, 0, i * envState.segmentLength)
+    scene.add(plane)
+
+    const grid = new THREE.Mesh(
+      new THREE.PlaneGeometry(levelWidth, envState.segmentLength, 20, 10),
+      new THREE.MeshBasicMaterial({
+        color: 0x5ac8ff,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.03,
+      })
+    )
+    grid.rotation.x = -Math.PI / 2
+    grid.position.set(0, 0.01, i * envState.segmentLength)
+    scene.add(grid)
+
+    levelSegments.push({ plane, grid })
+  }
+  const setLevelMeshVisible = (value) => {
+    for (let i = 0; i < levelSegments.length; i += 1) {
+      levelSegments[i].plane.visible = value
+      levelSegments[i].grid.visible = value
+    }
+  }
+  setLevelMeshVisible(levelMeshEnabled)
+
+  const refreshTargetShadows = () => {
+    for (let i = 0; i < targets.length; i += 1) {
+      const t = targets[i]
+      if (shadowsEnabled) {
+        if (!t.shadow) {
+          t.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 16), shadowMaterial)
+          t.shadow.rotation.x = -Math.PI / 2
+          scene.add(t.shadow)
+        }
+        t.shadow.visible = true
+      } else if (t.shadow) {
+        t.shadow.visible = false
+      }
+    }
+  }
+
+  if (toggleShadowsButton) {
+    toggleShadowsButton.textContent = shadowsEnabled ? 'Shadows: On' : 'Shadows: Off'
+    toggleShadowsButton.addEventListener('click', () => {
+      shadowsEnabled = !shadowsEnabled
+      playerShadow.visible = shadowsEnabled
+      refreshTargetShadows()
+      toggleShadowsButton.textContent = shadowsEnabled ? 'Shadows: On' : 'Shadows: Off'
+    })
+  }
+
+  if (toggleLevelMeshButton) {
+    toggleLevelMeshButton.textContent = levelMeshEnabled ? 'Level Mesh: On' : 'Level Mesh: Off'
+    toggleLevelMeshButton.addEventListener('click', () => {
+      levelMeshEnabled = !levelMeshEnabled
+      setLevelMeshVisible(levelMeshEnabled)
+      toggleLevelMeshButton.textContent = levelMeshEnabled ? 'Level Mesh: On' : 'Level Mesh: Off'
+    })
+  }
+
+  if (toggleDebugButton && debugEl) {
+    const updateLabel = () => {
+      toggleDebugButton.textContent = debugEnabled ? 'Debug: On' : 'Debug: Off'
+      debugEl.style.display = debugEnabled ? 'block' : 'none'
+      if (debugEnabled) debugEl.textContent = 'starting…'
+    }
+    updateLabel()
+    toggleDebugButton.addEventListener('click', () => {
+      debugEnabled = !debugEnabled
+      updateLabel()
+    })
+  }
 
   const tuningState = {
     speedX: baseSpeedX,
@@ -124,6 +273,8 @@ export function initGame({ container, toggleMouseButton, tuning, score }) {
     // UI scale 1..10. We'll map it to an internal lerp factor.
     turnResponse: 3.0,
     rollStrafeMultiplier: baseRollStrafeMultiplier,
+    camDistance: 10.0,
+    camHeight: 1.8,
   }
 
   if (tuning?.speedX) {
@@ -156,6 +307,33 @@ export function initGame({ container, toggleMouseButton, tuning, score }) {
       if (tuning.rollStrafeVal) tuning.rollStrafeVal.textContent = tuningState.rollStrafeMultiplier.toFixed(1)
     }
     tuning.rollStrafe.addEventListener('input', sync)
+    sync()
+  }
+  if (tuning?.mouseTightness) {
+    const sync = () => {
+      const value = Number(tuning.mouseTightness.value)
+      if (tuning.mouseTightnessVal) tuning.mouseTightnessVal.textContent = value.toFixed(1)
+      input.setMouseDirectSensitivity(value)
+    }
+    tuning.mouseTightness.addEventListener('input', sync)
+    sync()
+  }
+  if (tuning?.camDistance) {
+    const sync = () => {
+      const value = Number(tuning.camDistance.value)
+      tuningState.camDistance = value
+      if (tuning.camDistanceVal) tuning.camDistanceVal.textContent = value.toFixed(1)
+    }
+    tuning.camDistance.addEventListener('input', sync)
+    sync()
+  }
+  if (tuning?.camHeight) {
+    const sync = () => {
+      const value = Number(tuning.camHeight.value)
+      tuningState.camHeight = value
+      if (tuning.camHeightVal) tuning.camHeightVal.textContent = value.toFixed(1)
+    }
+    tuning.camHeight.addEventListener('input', sync)
     sync()
   }
 
@@ -206,6 +384,10 @@ export function initGame({ container, toggleMouseButton, tuning, score }) {
         playerZ: player.group.position.z,
         dt,
         targetSpawnTimer,
+        hitboxesEnabled,
+        shadowsEnabled,
+        shadowMaterial,
+        floorY: envState.floorY,
       })
 
       // Player flicker on hit (visual feedback only).
@@ -267,6 +449,29 @@ export function initGame({ container, toggleMouseButton, tuning, score }) {
 
       // Reticle = ship boresight (nose direction) projected to screen.
       updateReticle(reticleEl, player)
+      // Keep the plane level synced to ship height, but not locked to ship X.
+      // This makes the ship "pass over" the grid as it strafes.
+      const levelWrapBehindZ = player.group.position.z - envState.segmentLength
+      for (let i = 0; i < levelSegments.length; i += 1) {
+        const seg = levelSegments[i]
+        seg.plane.position.y = player.group.position.y - 0.01
+        seg.grid.position.y = player.group.position.y
+        if (seg.plane.position.z < levelWrapBehindZ) {
+          const offset = envState.segmentLength * envState.segmentCount
+          seg.plane.position.z += offset
+          seg.grid.position.z += offset
+        }
+      }
+
+      if (shadowsEnabled) {
+        playerShadow.position.set(player.group.position.x, envState.floorY + 0.02, player.group.position.z)
+        for (let i = 0; i < targets.length; i += 1) {
+          const t = targets[i]
+          if (t.shadow) {
+            t.shadow.position.set(t.mesh.position.x, envState.floorY + 0.02, t.mesh.position.z)
+          }
+        }
+      }
 
       // Fire (space)
       fireCooldown = Math.max(0, fireCooldown - dt)
@@ -320,7 +525,11 @@ export function initGame({ container, toggleMouseButton, tuning, score }) {
 
       // Camera behind ship, looking forward toward the horizon.
       const horizon = new THREE.Vector3(player.group.position.x, player.group.position.y, player.group.position.z + 25)
-      camera.position.set(player.group.position.x, player.group.position.y + 1.8, player.group.position.z - 10)
+      camera.position.set(
+        player.group.position.x,
+        player.group.position.y + tuningState.camHeight,
+        player.group.position.z - tuningState.camDistance
+      )
       camera.lookAt(horizon)
 
       if (debugEl && debugEnabled) {
