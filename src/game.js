@@ -11,11 +11,19 @@ import { createScoreSystem } from './systems/score.js'
 
 export function initGame({
   container,
+  menuButton,
   toggleMouseButton,
+  toggleTouchButton,
+  toggleInstructionsButton,
+  toggleInvertYButton,
   toggleHitboxesButton,
   toggleShadowsButton,
   toggleLevelMeshButton,
   toggleDebugButton,
+  touchControls,
+  touchStick,
+  touchFire,
+  touchRoll,
   tuning,
   score,
 }) {
@@ -77,7 +85,12 @@ export function initGame({
   player.group.position.set(0, 0, 0)
   scene.add(player.group)
 
-  const input = new InputManager({ canvas: renderer.domElement, touchStick: null, touchFire: null })
+  const input = new InputManager({
+    canvas: renderer.domElement,
+    touchStick,
+    touchFire,
+    touchRoll,
+  })
   let mouseMode = 'off'
   input.setMouseMode(mouseMode)
   if (toggleMouseButton) {
@@ -90,6 +103,81 @@ export function initGame({
       mouseMode = mouseMode === 'off' ? 'normal' : mouseMode === 'normal' ? 'direct' : 'off'
       input.setMouseMode(mouseMode)
       updateLabel()
+    })
+  }
+
+  const prefersTouch =
+    (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window
+  let touchMode = prefersTouch ? 'stick' : 'off'
+  const updateTouchControls = () => {
+    if (!touchControls) return
+    touchControls.dataset.mode = touchMode
+  }
+  const updateTouchLabel = () => {
+    if (!toggleTouchButton) return
+    const label =
+      touchMode === 'off' ? 'Touch: Off' : touchMode === 'drag' ? 'Touch: Drag' : 'Touch: Stick'
+    toggleTouchButton.textContent = label
+  }
+  input.setTouchMode(touchMode)
+  updateTouchControls()
+  updateTouchLabel()
+  if (toggleTouchButton) {
+    toggleTouchButton.addEventListener('click', () => {
+      touchMode = touchMode === 'off' ? 'stick' : touchMode === 'stick' ? 'drag' : 'off'
+      input.setTouchMode(touchMode)
+      updateTouchControls()
+      updateTouchLabel()
+    })
+  }
+
+  const settingsPanel = document.querySelector('#debug-panel')
+  let settingsOpen = settingsPanel ? settingsPanel.dataset.open !== 'false' : true
+  const updateSettingsPanel = () => {
+    if (!settingsPanel) return
+    settingsPanel.dataset.open = settingsOpen ? 'true' : 'false'
+  }
+  const updateMenuLabel = () => {
+    if (!menuButton) return
+    menuButton.textContent = settingsOpen ? 'Close' : 'Menu'
+  }
+  updateSettingsPanel()
+  updateMenuLabel()
+  if (menuButton) {
+    menuButton.addEventListener('click', () => {
+      settingsOpen = !settingsOpen
+      updateSettingsPanel()
+      updateMenuLabel()
+    })
+  }
+
+  const instructionsEl = document.querySelector('#instructions')
+  let instructionsVisible = false
+  const updateInstructions = () => {
+    if (instructionsEl) instructionsEl.style.display = instructionsVisible ? 'block' : 'none'
+    if (toggleInstructionsButton) {
+      toggleInstructionsButton.textContent = instructionsVisible ? 'HUD Tips: On' : 'HUD Tips: Off'
+    }
+  }
+  updateInstructions()
+  if (toggleInstructionsButton) {
+    toggleInstructionsButton.addEventListener('click', () => {
+      instructionsVisible = !instructionsVisible
+      updateInstructions()
+    })
+  }
+
+  let invertY = false
+  const updateInvertLabel = () => {
+    if (toggleInvertYButton) {
+      toggleInvertYButton.textContent = invertY ? 'Invert Y: On' : 'Invert Y: Off'
+    }
+  }
+  updateInvertLabel()
+  if (toggleInvertYButton) {
+    toggleInvertYButton.addEventListener('click', () => {
+      invertY = !invertY
+      updateInvertLabel()
     })
   }
   const bounds = { x: 15.75, y: 10.5 }
@@ -184,7 +272,7 @@ export function initGame({
   playerShadow.visible = shadowsEnabled
   scene.add(playerShadow)
 
-  let levelMeshEnabled = true
+  let levelMeshEnabled = false
   const levelWidth = 80
   const levelSegments = []
   for (let i = 0; i < envState.segmentCount; i += 1) {
@@ -352,8 +440,8 @@ export function initGame({
       // Movement
       // X: keep current "feels correct" mapping.
       const xInput = -steer.x
-      // Y: keyboard/gamepad are "flight inverted", mouse is "screen direct".
-      const yInput = usingMouseAim ? -steer.y : steer.y
+      // Y: default is screen/direct (up = nose up). Invert toggles flight-style.
+      const yInput = invertY ? steer.y : -steer.y
       const speedScale = state.boost.held ? boostMultiplier : state.brake.held ? brakeMultiplier : 1
       const rollStrafe =
         barrelRollTimer > 0 && barrelRollDir !== 0
@@ -409,8 +497,7 @@ export function initGame({
 
       // Match heading to actual movement X direction.
       const targetYaw = xInput * yawMax
-      const pitchSign = usingMouseAim ? 1 : -1
-      const targetPitch = pitchSign * aim.y * pitchMax
+      const targetPitch = -yInput * pitchMax
       // Bank into the turn (move right => clockwise bank on screen).
       const targetRoll = -xInput * rollMax
 

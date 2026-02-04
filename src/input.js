@@ -17,18 +17,26 @@ const KEY_BINDINGS = {
 }
 
 export class InputManager {
-  constructor({ canvas, touchStick, touchFire }) {
+  constructor({ canvas, touchStick, touchFire, touchRoll }) {
     this.canvas = canvas
     this.touchStick = touchStick
     this.touchFire = touchFire
+    this.touchRoll = touchRoll
     this.keys = new Set()
     this.pointerDown = false
     this.touchSteer = { x: 0, y: 0 }
+    this.touchDragSteer = { x: 0, y: 0 }
+    this.touchDragActive = false
+    this.touchDragPointerId = null
+    this.touchDragStart = { x: 0, y: 0 }
+    this.touchDragRadius = 80
     this.touchFireHeld = false
     this.mouseAim = { x: 0, y: 0 }
     this.mouseActive = false
     this.mouseEnabled = true
     this.mouseMode = 'normal'
+    this.touchMode = 'off'
+    this.touchRollHeld = false
     this.mouseSensitivity = 1.0
     this.directSensitivity = 10.0
     this.prevState = this._emptyState()
@@ -50,11 +58,29 @@ export class InputManager {
       }
     })
 
-    this.canvas.addEventListener('pointerdown', () => {
+    this.canvas.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'touch') {
+        if (this.touchMode === 'stick') return
+        if (this.touchMode === 'drag') {
+          this._startTouchDrag(event)
+          return
+        }
+      }
       this.pointerDown = true
     })
 
-    window.addEventListener('pointerup', () => {
+    window.addEventListener('pointerup', (event) => {
+      if (event.pointerType === 'touch' && this.touchMode === 'drag') {
+        this._endTouchDrag(event)
+        return
+      }
+      this.pointerDown = false
+    })
+    window.addEventListener('pointercancel', (event) => {
+      if (event.pointerType === 'touch' && this.touchMode === 'drag') {
+        this._endTouchDrag(event)
+        return
+      }
       this.pointerDown = false
     })
 
@@ -71,6 +97,10 @@ export class InputManager {
       }
     })
     this.canvas.addEventListener('pointermove', (event) => {
+      if (event.pointerType === 'touch' && this.touchMode === 'drag') {
+        this._moveTouchDrag(event)
+        return
+      }
       if (event.pointerType !== 'mouse') return
       if (!this.mouseEnabled) return
       const rect = this.canvas.getBoundingClientRect()
@@ -112,6 +142,17 @@ export class InputManager {
     if (this.mouseMode === 'direct') {
       this.mouseSensitivity = value
     }
+  }
+
+  setTouchMode(mode) {
+    this.touchMode = mode
+    this.touchSteer.x = 0
+    this.touchSteer.y = 0
+    this.touchDragSteer.x = 0
+    this.touchDragSteer.y = 0
+    this.touchRollHeld = false
+    this.touchFireHeld = false
+    this.pointerDown = false
   }
 
   _emptyState() {
@@ -177,6 +218,53 @@ export class InputManager {
 
     this.touchFire.addEventListener('pointerup', endFire)
     this.touchFire.addEventListener('pointercancel', endFire)
+
+    if (this.touchRoll) {
+      this.touchRoll.addEventListener('pointerdown', (event) => {
+        this.touchRollHeld = true
+        this.touchRoll.setPointerCapture(event.pointerId)
+      })
+      const endRoll = (event) => {
+        this.touchRollHeld = false
+        this.touchRoll.releasePointerCapture(event.pointerId)
+      }
+      this.touchRoll.addEventListener('pointerup', endRoll)
+      this.touchRoll.addEventListener('pointercancel', endRoll)
+    }
+  }
+
+  _startTouchDrag(event) {
+    if (this.touchDragActive) return
+    this.touchDragActive = true
+    this.touchDragPointerId = event.pointerId
+    const rect = this.canvas.getBoundingClientRect()
+    const minSide = Math.min(rect.width, rect.height)
+    this.touchDragRadius = Math.max(60, Math.min(160, minSide * 0.18))
+    this.touchDragStart.x = event.clientX
+    this.touchDragStart.y = event.clientY
+    this.canvas.setPointerCapture(event.pointerId)
+  }
+
+  _moveTouchDrag(event) {
+    if (!this.touchDragActive) return
+    if (this.touchDragPointerId !== event.pointerId) return
+    const dx = event.clientX - this.touchDragStart.x
+    const dy = event.clientY - this.touchDragStart.y
+    const length = Math.hypot(dx, dy)
+    const clamped = Math.min(length, this.touchDragRadius)
+    const norm = length > 0 ? clamped / length : 0
+    this.touchDragSteer.x = (dx * norm) / this.touchDragRadius
+    this.touchDragSteer.y = (dy * norm) / this.touchDragRadius
+  }
+
+  _endTouchDrag(event) {
+    if (!this.touchDragActive) return
+    if (this.touchDragPointerId !== event.pointerId) return
+    this.touchDragActive = false
+    this.touchDragPointerId = null
+    this.touchDragSteer.x = 0
+    this.touchDragSteer.y = 0
+    this.canvas.releasePointerCapture(event.pointerId)
   }
 
   _applyButton(state, action, held) {
@@ -204,21 +292,24 @@ export class InputManager {
     const mouseX = usingMouse ? this.mouseAim.x * this.mouseSensitivity : 0
     const mouseY = usingMouse ? this.mouseAim.y * this.mouseSensitivity : 0
 
-    state.steer.x = this._clampAxis(keyboardX + padX + this.touchSteer.x + mouseX)
-    state.steer.y = this._clampAxis(keyboardY + padY + this.touchSteer.y + mouseY)
+    const touchX = this.touchMode === 'drag' ? this.touchDragSteer.x : this.touchSteer.x
+    const touchY = this.touchMode === 'drag' ? this.touchDragSteer.y : this.touchSteer.y
+    state.steer.x = this._clampAxis(keyboardX + padX + touchX + mouseX)
+    state.steer.y = this._clampAxis(keyboardY + padY + touchY + mouseY)
     state.aim.x = usingMouse ? this.mouseAim.x : state.steer.x
     state.aim.y = usingMouse ? this.mouseAim.y : state.steer.y
     state.usingMouseAim = usingMouse
 
+    const allowPointerFire = this.touchMode === 'off' || this.touchMode === 'drag'
     const fireHeld =
-      this.pointerDown ||
+      (allowPointerFire && this.pointerDown) ||
       this.keys.has('fire') ||
       this.touchFireHeld ||
       (pad && (pad.buttons[0]?.pressed || pad.buttons[2]?.pressed))
 
     const boostHeld = this.keys.has('boost') || (pad && pad.buttons[3]?.pressed)
     const brakeHeld = this.keys.has('brake') || (pad && pad.buttons[4]?.pressed)
-    const rollHeld = this.keys.has('roll') || (pad && pad.buttons[1]?.pressed)
+    const rollHeld = this.keys.has('roll') || (pad && pad.buttons[1]?.pressed) || this.touchRollHeld
     const dodgeHeld = this.keys.has('dodge') || (pad && pad.buttons[0]?.pressed)
     const missilesHeld = this.keys.has('missiles') || (pad && pad.buttons[5]?.pressed)
 

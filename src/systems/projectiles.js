@@ -13,7 +13,7 @@ export function tryFireProjectile({
   scene,
 }) {
   let cooldown = Math.max(0, fireCooldown)
-  if (state.fire.pressed && cooldown <= 0) {
+  if ((state.fire.pressed || state.fire.held) && cooldown <= 0) {
     const proj = createProjectile(false)
     proj.mesh.position.copy(player.group.position)
     proj.mesh.position.z += 2.2

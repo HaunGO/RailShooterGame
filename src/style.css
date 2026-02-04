@@ -30,6 +30,7 @@ canvas {
   height: 100%;
   position: absolute;
   inset: 0;
+  touch-action: none;
 }
 
 #hud {
@@ -42,14 +43,41 @@ canvas {
 
 #debug-panel {
   position: absolute;
-  left: 16px;
-  top: 16px;
+  left: 94px;
+  top: 10px;
   width: 260px;
   pointer-events: auto;
+  z-index: 30;
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px 12px;
-  background: rgba(6, 10, 20, 0.6);
+  background: rgba(6, 10, 20, 0.95);
   border: 1px solid rgba(231, 238, 249, 0.2);
   border-radius: 10px;
+}
+
+#debug-panel[data-open='false'] {
+  display: none;
+}
+
+#menu-button {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  pointer-events: auto;
+  z-index: 31;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(231, 238, 249, 0.25);
+  background: rgba(6, 10, 20, 0.6);
+  color: rgba(231, 238, 249, 0.9);
+  font: inherit;
+  cursor: pointer;
+}
+
+#menu-button:hover {
+  border-color: rgba(231, 238, 249, 0.45);
 }
 
 #debug-title {
@@ -181,9 +209,13 @@ canvas {
   pointer-events: none;
 }
 
+#touch-controls[data-mode='off'] {
+  display: none;
+}
+
 .touch-zone {
   position: absolute;
-  bottom: 18px;
+  bottom: 10%;
   width: 150px;
   height: 150px;
   border-radius: 50%;
@@ -191,6 +223,8 @@ canvas {
   background: rgba(10, 15, 31, 0.35);
   pointer-events: auto;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #touch-stick {
@@ -204,6 +238,29 @@ canvas {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+#touch-controls[data-mode='drag'] #touch-stick {
+  display: none;
+}
+
+.touch-roll {
+  position: absolute;
+  right: 18px;
+  bottom: calc(10% + 160px);
+  width: 150px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(231, 238, 249, 0.25);
+  background: rgba(6, 10, 20, 0.55);
+  color: rgba(231, 238, 249, 0.9);
+  font: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
