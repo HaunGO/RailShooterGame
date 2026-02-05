@@ -144,6 +144,10 @@ export class InputManager {
     }
   }
 
+  setMouseSensitivity(value) {
+    this.mouseSensitivity = value
+  }
+
   setTouchMode(mode) {
     this.touchMode = mode
     this.touchSteer.x = 0

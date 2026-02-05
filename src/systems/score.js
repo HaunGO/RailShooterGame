@@ -1,22 +1,22 @@
 export function createScoreSystem({ scoreEl, comboEl }) {
   let score = 0
-  let combo = 0
+  let multiplier = 1
 
   const updateUI = () => {
     if (scoreEl) scoreEl.textContent = score.toString()
-    if (comboEl) comboEl.textContent = combo > 0 ? `x${combo}` : 'x0'
+    if (comboEl) comboEl.textContent = `x${multiplier}`
   }
 
   updateUI()
 
   return {
-    addHit(points = 100) {
-      combo = Math.max(1, combo + 1)
-      score += points * combo
+    addHit(points = 10) {
+      score += points * multiplier
+      multiplier += 1
       updateUI()
     },
     resetCombo() {
-      combo = 0
+      multiplier = 1
       updateUI()
     },
   }

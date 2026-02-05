@@ -9,7 +9,7 @@ export function handleProjectileTargetCollisions({ targets, projectiles, scene, 
         targets.splice(i, 1)
         projectiles.splice(j, 1)
         effects.addExplosion(t.mesh.position, { color: 0xfff1a6, radius: 0.6 })
-        if (onHit) onHit(t)
+        if (onHit) onHit(t, p)
         break
       }
     }

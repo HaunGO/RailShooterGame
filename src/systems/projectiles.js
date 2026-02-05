@@ -11,6 +11,7 @@ export function tryFireProjectile({
   player,
   projectiles,
   scene,
+  onFire,
 }) {
   let cooldown = Math.max(0, fireCooldown)
   if ((state.fire.pressed || state.fire.held) && cooldown <= 0) {
@@ -22,12 +23,13 @@ export function tryFireProjectile({
     proj.velocity = tmpForward.clone().multiplyScalar(projectileSpeed)
     scene.add(proj.mesh)
     projectiles.push(proj)
+    if (onFire) onFire(proj)
     cooldown = projectileCooldown
   }
   return cooldown
 }
 
-export function updateProjectiles({ projectiles, scene, dt, playerZ, projectileSpeed }) {
+export function updateProjectiles({ projectiles, scene, dt, playerZ, projectileSpeed, onMiss }) {
   for (let i = projectiles.length - 1; i >= 0; i -= 1) {
     const p = projectiles[i]
     if (p.velocity) {
@@ -38,6 +40,7 @@ export function updateProjectiles({ projectiles, scene, dt, playerZ, projectileS
       p.mesh.position.z += projectileSpeed * dt
     }
     if (p.mesh.position.z > playerZ + 120) {
+      if (onMiss) onMiss(p)
       scene.remove(p.mesh)
       projectiles.splice(i, 1)
     }

@@ -19,6 +19,7 @@ export function initGame({
   toggleHitboxesButton,
   toggleShadowsButton,
   toggleLevelMeshButton,
+  toggleLaserButton,
   toggleDebugButton,
   touchControls,
   touchStick,
@@ -95,12 +96,11 @@ export function initGame({
   input.setMouseMode(mouseMode)
   if (toggleMouseButton) {
     const updateLabel = () => {
-      toggleMouseButton.textContent =
-        mouseMode === 'off' ? 'Mouse Aim: Off' : mouseMode === 'direct' ? 'Mouse Aim: Direct' : 'Mouse Aim: On'
+      toggleMouseButton.textContent = mouseMode === 'off' ? 'Mouse Aim: Off' : 'Mouse Aim: On'
     }
     updateLabel()
     toggleMouseButton.addEventListener('click', () => {
-      mouseMode = mouseMode === 'off' ? 'normal' : mouseMode === 'normal' ? 'direct' : 'off'
+      mouseMode = mouseMode === 'off' ? 'normal' : 'off'
       input.setMouseMode(mouseMode)
       updateLabel()
     })
@@ -189,20 +189,43 @@ export function initGame({
   const boostMultiplier = 4.0
   const brakeMultiplier = 0.1
   const projectileSpeed = 35
-  const projectileCooldown = 0.12
+  const projectileCooldown = 0.5
   let fireCooldown = 0
+  let nextShotId = 1
+  let nextExpectedHitId = 1
   const projectiles = []
   const targets = []
   let targetSpawnTimer = 0
   let playerHitTimer = 0
-  const playerHitInvuln = 0.6
+  const playerHitInvuln = 1
   let barrelRollTimer = 0
   let barrelRollDir = 0
   let barrelRollStartZ = 0
   let barrelRollCooldown = 0
+  let loopTimer = 0
+  let loopDir = 0
+  let loopCooldown = 0
+  let loopWasActive = false
+  let loopPitchPrev = 0
+  let loopBlendInTimer = 0
+  let loopStartPitch = 0
+  const loopBlendStartPos = new THREE.Vector3()
+  let loopBlendOutTimer = 0
+  let loopEndPitch = 0
+  let loopEndRoll = 0
+  const loopStartPos = new THREE.Vector3()
+  const loopForward = new THREE.Vector3()
+  const loopRight = new THREE.Vector3()
+  const loopWorldUp = new THREE.Vector3(0, 1, 0)
   const barrelRollDuration = 1.0
-  const barrelRollCooldownTime = 0.25
+  const barrelRollCooldownTime = 0.5
   const baseRollStrafeMultiplier = 1.6
+  const loopDuration = 2.5
+  const loopCooldownTime = 0.5
+  const loopRadius = 7
+  const loopBlendInDuration = 0.35
+  const loopBlendOutDuration = 0
+  const loopForwardCarry = forwardSpeed * loopDuration
   // Approximate the paper-airplane shape with multiple spheres in ship-local space.
   const shipHitSpheres = [
     { offset: new THREE.Vector3(0, 0.1, 1.6), radius: 0.55 }, // nose
@@ -213,6 +236,11 @@ export function initGame({
   ]
   const tmpSphereCenter = new THREE.Vector3()
   const tmpToTarget = new THREE.Vector3()
+  const tmpForward = new THREE.Vector3()
+  const tmpLaserOrigin = new THREE.Vector3()
+  const tmpLaserEnd = new THREE.Vector3()
+  const tmpLoopOffset = new THREE.Vector3()
+  const tmpLoopTarget = new THREE.Vector3()
 
   const reticleEl = document.querySelector('#reticle')
   const updateReticle = createReticleSystem(renderer, camera)
@@ -221,6 +249,7 @@ export function initGame({
   const shipVelocity = new THREE.Vector3()
   let hitboxesEnabled = false
   let shadowsEnabled = true
+  let laserEnabled = true
   const shadowMaterial = new THREE.MeshBasicMaterial({
     color: 0x000000,
     transparent: true,
@@ -271,6 +300,54 @@ export function initGame({
   playerShadow.rotation.x = -Math.PI / 2
   playerShadow.visible = shadowsEnabled
   scene.add(playerShadow)
+
+  const laserMaxDistance = 120
+  const laserLineGeometry = new THREE.BufferGeometry()
+  laserLineGeometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3))
+  const laserLine = new THREE.Line(
+    laserLineGeometry,
+    new THREE.LineBasicMaterial({ color: 0xff3344, transparent: true, opacity: 0.65 })
+  )
+  laserLine.frustumCulled = false
+  laserLine.visible = laserEnabled
+  scene.add(laserLine)
+  const laserHit = new THREE.Mesh(
+    new THREE.SphereGeometry(0.08, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0xff4a4a, transparent: true, opacity: 0.9 })
+  )
+  laserHit.visible = false
+  scene.add(laserHit)
+  const laserRaycaster = new THREE.Raycaster()
+  laserRaycaster.far = laserMaxDistance
+  let laserTarget = null
+
+  const clearLaserHighlight = () => {
+    if (!laserTarget) return
+    const mat = laserTarget.mesh?.material
+    const original = laserTarget._laserOriginal
+    if (mat && mat.isMeshStandardMaterial && original) {
+      mat.color.copy(original.color)
+      mat.emissive.copy(original.emissive)
+      mat.emissiveIntensity = original.emissiveIntensity
+    }
+    laserTarget = null
+  }
+
+  const applyLaserHighlight = (target) => {
+    if (!target?.mesh?.material) return
+    const mat = target.mesh.material
+    if (!mat.isMeshStandardMaterial) return
+    if (!target._laserOriginal) {
+      target._laserOriginal = {
+        color: mat.color.clone(),
+        emissive: mat.emissive.clone(),
+        emissiveIntensity: mat.emissiveIntensity,
+      }
+    }
+    mat.color.set(0xff4a4a)
+    mat.emissive.set(0xff1a1a)
+    mat.emissiveIntensity = 0.9
+  }
 
   let levelMeshEnabled = false
   const levelWidth = 80
@@ -342,6 +419,22 @@ export function initGame({
     })
   }
 
+  if (toggleLaserButton) {
+    const updateLabel = () => {
+      toggleLaserButton.textContent = laserEnabled ? 'Laser Sight: On' : 'Laser Sight: Off'
+    }
+    updateLabel()
+    toggleLaserButton.addEventListener('click', () => {
+      laserEnabled = !laserEnabled
+      laserLine.visible = laserEnabled
+      if (!laserEnabled) {
+        laserHit.visible = false
+        clearLaserHighlight()
+      }
+      updateLabel()
+    })
+  }
+
   if (toggleDebugButton && debugEl) {
     const updateLabel = () => {
       toggleDebugButton.textContent = debugEnabled ? 'Debug: On' : 'Debug: Off'
@@ -397,13 +490,15 @@ export function initGame({
     tuning.rollStrafe.addEventListener('input', sync)
     sync()
   }
-  if (tuning?.mouseTightness) {
+  if (tuning?.mouseIntensity) {
     const sync = () => {
-      const value = Number(tuning.mouseTightness.value)
-      if (tuning.mouseTightnessVal) tuning.mouseTightnessVal.textContent = value.toFixed(1)
-      input.setMouseDirectSensitivity(value)
+      const value = Number(tuning.mouseIntensity.value)
+      if (tuning.mouseIntensityVal) tuning.mouseIntensityVal.textContent = value.toFixed(1)
+      // Map 1..10 -> 0.5..3.0 (10 is very tight)
+      const sensitivity = 0.5 + (value / 10) * 2.5
+      input.setMouseSensitivity(sensitivity)
     }
-    tuning.mouseTightness.addEventListener('input', sync)
+    tuning.mouseIntensity.addEventListener('input', sync)
     sync()
   }
   if (tuning?.camDistance) {
@@ -504,38 +599,191 @@ export function initGame({
       // Barrel roll (Shift + Left/Right).
       barrelRollCooldown = Math.max(0, barrelRollCooldown - dt)
       if (barrelRollTimer <= 0 && barrelRollCooldown <= 0 && state.roll.held) {
-        if (state.steer.x <= -0.6) {
+        const rollThreshold = usingMouseAim ? 0.1 : 0.6
+        if (state.steer.x <= -rollThreshold) {
           barrelRollTimer = barrelRollDuration
           barrelRollDir = -1
           barrelRollStartZ = player.group.rotation.z
           barrelRollCooldown = barrelRollCooldownTime
-        } else if (state.steer.x >= 0.6) {
+        } else if (state.steer.x >= rollThreshold) {
           barrelRollTimer = barrelRollDuration
           barrelRollDir = 1
           barrelRollStartZ = player.group.rotation.z
           barrelRollCooldown = barrelRollCooldownTime
         }
       }
+      // Loop (Shift + Up). Uses motion angle to add a spiral bias.
+      loopCooldown = Math.max(0, loopCooldown - dt)
+      const loopThreshold = usingMouseAim ? 0.3 : 0.55
+      if (
+        loopTimer <= 0 &&
+        loopCooldown <= 0 &&
+        barrelRollTimer <= 0 &&
+        state.roll.held &&
+        yInput >= loopThreshold
+      ) {
+        loopTimer = loopDuration
+        loopDir = -1
+        loopStartPos.copy(player.group.position)
+        loopBlendStartPos.copy(player.group.position)
+        loopForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
+        loopRight.crossVectors(loopForward, loopWorldUp).normalize()
+        loopPitchPrev = player.group.rotation.x
+        loopStartPitch = player.group.rotation.x
+        loopBlendInTimer = loopBlendInDuration
+        loopBlendOutTimer = 0
+        loopCooldown = loopCooldownTime
+      }
       if (barrelRollTimer > 0) {
         barrelRollTimer = Math.max(0, barrelRollTimer - dt)
       }
+      const wasLooping = loopTimer > 0
+      if (loopTimer > 0) {
+        loopTimer = Math.max(0, loopTimer - dt)
+        if (loopTimer === 0) {
+          loopEndPitch = player.group.rotation.x
+          loopEndRoll = player.group.rotation.z
+          loopBlendOutTimer = 0
+        }
+      }
+      if (loopBlendInTimer > 0) {
+        loopBlendInTimer = Math.max(0, loopBlendInTimer - dt)
+      }
+      if (loopBlendOutTimer > 0) {
+        loopBlendOutTimer = Math.max(0, loopBlendOutTimer - dt)
+      }
+      loopWasActive = wasLooping
       const rollPhase = barrelRollTimer > 0 ? 1 - barrelRollTimer / barrelRollDuration : 0
       const easedPhase = rollPhase * rollPhase * (3 - 2 * rollPhase)
       // Full roll = 360° rotation.
       const barrelRollOffset = barrelRollTimer > 0 ? barrelRollDir * easedPhase * Math.PI * 2 : 0
-
+      const loopPhase = loopTimer > 0 ? 1 - loopTimer / loopDuration : 0
+      const loopPhaseEased = loopPhase * loopPhase * (3 - 2 * loopPhase)
+      const loopTheta = loopPhase * Math.PI * 2
+      const loopBlendIn = loopBlendInDuration > 0 ? 1 - loopBlendInTimer / loopBlendInDuration : 1
+      const loopBlendT = Math.min(1, Math.max(0, loopBlendIn))
+      const loopBlendScale = loopBlendT * loopBlendT * (3 - 2 * loopBlendT)
       player.group.rotation.y = THREE.MathUtils.lerp(player.group.rotation.y, targetYaw, rotLerp)
-      player.group.rotation.x = THREE.MathUtils.lerp(player.group.rotation.x, targetPitch, rotLerp)
+      if (loopTimer > 0) {
+        const dTheta = 0.02
+        const theta2 = Math.min(loopTheta + dTheta, Math.PI * 2)
+        const phase2 = theta2 / (Math.PI * 2)
+        const verticalOffset = loopRadius * (1 - Math.cos(loopTheta))
+        const forwardOffset = loopRadius * Math.sin(loopTheta) * -loopDir + loopForwardCarry * loopPhase
+        const verticalOffset2 = loopRadius * (1 - Math.cos(theta2))
+        const forwardOffset2 = loopRadius * Math.sin(theta2) * -loopDir + loopForwardCarry * phase2
+        tmpLoopOffset
+          .copy(loopStartPos)
+          .addScaledVector(loopForward, forwardOffset)
+          .addScaledVector(loopWorldUp, verticalOffset)
+        const tmpLoopOffset2 = tmpForward
+          .copy(loopStartPos)
+          .addScaledVector(loopForward, forwardOffset2)
+          .addScaledVector(loopWorldUp, verticalOffset2)
+        const tangent = tmpLoopOffset2.sub(tmpLoopOffset).normalize()
+        let desiredX = -Math.atan2(tangent.y, tangent.dot(loopForward))
+        // Hold current pitch briefly, then ease into the loop pitch.
+        const holdPhase = 0.1
+        if (loopPhase < holdPhase) {
+          desiredX = loopStartPitch
+        } else {
+          const rampT = Math.min(1, (loopPhase - holdPhase) / 0.25)
+          const ramp = rampT * rampT * (3 - 2 * rampT)
+          desiredX = loopStartPitch + (desiredX - loopStartPitch) * ramp
+        }
+        let adjusted = desiredX
+        while (adjusted - loopPitchPrev > Math.PI) adjusted -= Math.PI * 2
+        while (adjusted - loopPitchPrev < -Math.PI) adjusted += Math.PI * 2
+        loopPitchPrev = adjusted
+        player.group.rotation.x = THREE.MathUtils.lerp(loopStartPitch, adjusted, loopBlendScale)
+      } else if (loopBlendOutTimer > 0) {
+        const t = 1 - loopBlendOutTimer / loopBlendOutDuration
+        const blend = t * t * (3 - 2 * t)
+        let adjustedTarget = targetPitch
+        while (adjustedTarget - loopEndPitch > Math.PI) adjustedTarget -= Math.PI * 2
+        while (adjustedTarget - loopEndPitch < -Math.PI) adjustedTarget += Math.PI * 2
+        player.group.rotation.x = THREE.MathUtils.lerp(loopEndPitch, adjustedTarget, blend)
+      } else {
+        if (loopWasActive) {
+          let adjusted = player.group.rotation.x
+          while (adjusted - targetPitch > Math.PI) adjusted -= Math.PI * 2
+          while (adjusted - targetPitch < -Math.PI) adjusted += Math.PI * 2
+          player.group.rotation.x = adjusted
+        }
+        player.group.rotation.x = THREE.MathUtils.lerp(player.group.rotation.x, targetPitch, rotLerp)
+      }
       if (barrelRollTimer > 0) {
         player.group.rotation.z = barrelRollStartZ + barrelRollOffset
+      } else if (loopTimer > 0) {
+        const spiralRoll = Math.sin(loopTheta * 2) * 0.25 * Math.max(0.2, Math.abs(xInput))
+        const wrapped = ((player.group.rotation.z % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+        const nearest = wrapped > Math.PI ? wrapped - Math.PI * 2 : wrapped
+        player.group.rotation.z = THREE.MathUtils.lerp(nearest, targetRoll + spiralRoll, rotLerp)
+      } else if (loopBlendOutTimer > 0) {
+        const t = 1 - loopBlendOutTimer / loopBlendOutDuration
+        const blend = t * t * (3 - 2 * t)
+        let adjustedTarget = targetRoll
+        while (adjustedTarget - loopEndRoll > Math.PI) adjustedTarget -= Math.PI * 2
+        while (adjustedTarget - loopEndRoll < -Math.PI) adjustedTarget += Math.PI * 2
+        player.group.rotation.z = THREE.MathUtils.lerp(loopEndRoll, adjustedTarget, blend)
       } else {
         const wrapped = ((player.group.rotation.z % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
         const nearest = wrapped > Math.PI ? wrapped - Math.PI * 2 : wrapped
         player.group.rotation.z = THREE.MathUtils.lerp(nearest, targetRoll, rotLerp)
       }
 
+      if (loopTimer > 0) {
+        const spiralBias = Math.sin(loopTheta * 2) * xInput
+        const verticalOffset = loopRadius * (1 - Math.cos(loopTheta))
+        const forwardOffset = loopRadius * Math.sin(loopTheta) * -loopDir + loopForwardCarry * loopPhase
+        tmpLoopTarget
+          .copy(loopStartPos)
+          .addScaledVector(loopForward, forwardOffset)
+          .addScaledVector(loopWorldUp, verticalOffset)
+          .addScaledVector(loopRight, spiralBias * loopRadius * 0.35)
+        if (loopBlendScale < 1) {
+          tmpLoopOffset.copy(loopBlendStartPos).lerp(tmpLoopTarget, loopBlendScale)
+          player.group.position.copy(tmpLoopOffset)
+        } else {
+          player.group.position.copy(tmpLoopTarget)
+        }
+      }
+
       // Reticle = ship boresight (nose direction) projected to screen.
       updateReticle(reticleEl, player)
+      if (laserEnabled) {
+        // Laser sight: ray from nose to closest target (or max distance).
+        tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
+        tmpLaserOrigin.copy(player.group.position).addScaledVector(tmpForward, 1.3)
+        laserRaycaster.set(tmpLaserOrigin, tmpForward)
+        const targetMeshes = targets.map((t) => t.mesh)
+        const hits = targetMeshes.length > 0 ? laserRaycaster.intersectObjects(targetMeshes, false) : []
+        if (hits.length > 0) {
+          const hit = hits[0]
+          tmpLaserEnd.copy(hit.point)
+          laserHit.position.copy(hit.point)
+          laserHit.visible = true
+          if (laserTarget !== hit.object.__targetRef) {
+            clearLaserHighlight()
+          }
+          if (!hit.object.__targetRef) {
+            hit.object.__targetRef = targets.find((t) => t.mesh === hit.object) || null
+          }
+          if (hit.object.__targetRef) {
+            laserTarget = hit.object.__targetRef
+            applyLaserHighlight(laserTarget)
+          }
+        } else {
+          tmpLaserEnd.copy(tmpLaserOrigin).addScaledVector(tmpForward, laserMaxDistance)
+          laserHit.visible = false
+          clearLaserHighlight()
+        }
+        const laserPos = laserLine.geometry.attributes.position
+        laserPos.setXYZ(0, tmpLaserOrigin.x, tmpLaserOrigin.y, tmpLaserOrigin.z)
+        laserPos.setXYZ(1, tmpLaserEnd.x, tmpLaserEnd.y, tmpLaserEnd.z)
+        laserPos.needsUpdate = true
+      }
+
       // Keep the plane level synced to ship height, but not locked to ship X.
       // This makes the ship "pass over" the grid as it strafes.
       const levelWrapBehindZ = player.group.position.z - envState.segmentLength
@@ -570,6 +818,10 @@ export function initGame({
         player,
         projectiles,
         scene,
+        onFire: (proj) => {
+          proj.shotId = nextShotId
+          nextShotId += 1
+        },
       })
 
       // Update projectiles (forward +Z)
@@ -579,6 +831,17 @@ export function initGame({
         dt,
         playerZ: player.group.position.z,
         projectileSpeed,
+        onMiss: (projectile) => {
+          const shotId = projectile?.shotId
+          if (typeof shotId !== 'number') {
+            scoreSystem.resetCombo()
+            return
+          }
+          if (shotId >= nextExpectedHitId) {
+            scoreSystem.resetCombo()
+            nextExpectedHitId = shotId + 1
+          }
+        },
       })
 
       // Projectile vs target collisions (simple radius check).
@@ -587,7 +850,18 @@ export function initGame({
         projectiles,
         scene,
         effects,
-        onHit: () => scoreSystem.addHit(10),
+        onHit: (_target, projectile) => {
+          const shotId = projectile?.shotId
+          if (typeof shotId !== 'number') {
+            scoreSystem.addHit(10)
+            return
+          }
+          if (shotId !== nextExpectedHitId) {
+            scoreSystem.resetCombo()
+          }
+          scoreSystem.addHit(10)
+          nextExpectedHitId = Math.max(nextExpectedHitId, shotId + 1)
+        },
       })
 
       // Target hits ship (multi-sphere). Despawn target + flicker ship + impact flash.
@@ -604,6 +878,9 @@ export function initGame({
       })
       playerHitTimer = shipHit.playerHitTimer
       if (shipHit.hit) scoreSystem.resetCombo()
+      if (laserTarget && !targets.includes(laserTarget)) {
+        clearLaserHighlight()
+      }
 
       // Update explosions.
       effects.update(dt)

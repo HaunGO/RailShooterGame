@@ -22,6 +22,7 @@ app.innerHTML = `
         <button id="toggle-hitboxes" type="button">Hitboxes: Off</button>
         <button id="toggle-shadows" type="button">Shadows: Off</button>
         <button id="toggle-levelmesh" type="button">Level Mesh: On</button>
+        <button id="toggle-laser" type="button">Laser Sight: On</button>
         <button id="toggle-debug" type="button">Debug: Off</button>
       </div>
       <div id="tuning">
@@ -42,8 +43,8 @@ app.innerHTML = `
         <input id="roll-strafe" type="range" min="1.0" max="3.0" step="0.1" value="1.6" />
       </div>
       <div class="tuning-row">
-        <label for="mouse-tightness">Mouse tightness <span id="mouse-tightness-val">10.0</span></label>
-        <input id="mouse-tightness" type="range" min="1.0" max="10.0" step="0.1" value="10.0" />
+        <label for="mouse-intensity">Mouse aim intensity <span id="mouse-intensity-val">6.0</span></label>
+        <input id="mouse-intensity" type="range" min="1" max="10" step="0.1" value="6.0" />
       </div>
       <div class="tuning-row">
         <label for="cam-distance">Camera distance <span id="cam-distance-val">10.0</span></label>
@@ -81,6 +82,7 @@ initGame({
   toggleHitboxesButton: document.querySelector('#toggle-hitboxes'),
   toggleShadowsButton: document.querySelector('#toggle-shadows'),
   toggleLevelMeshButton: document.querySelector('#toggle-levelmesh'),
+  toggleLaserButton: document.querySelector('#toggle-laser'),
   toggleDebugButton: document.querySelector('#toggle-debug'),
   touchControls: document.querySelector('#touch-controls'),
   touchStick: document.querySelector('#touch-stick'),
@@ -95,8 +97,8 @@ initGame({
     turnResponseVal: document.querySelector('#turn-response-val'),
     rollStrafe: document.querySelector('#roll-strafe'),
     rollStrafeVal: document.querySelector('#roll-strafe-val'),
-    mouseTightness: document.querySelector('#mouse-tightness'),
-    mouseTightnessVal: document.querySelector('#mouse-tightness-val'),
+    mouseIntensity: document.querySelector('#mouse-intensity'),
+    mouseIntensityVal: document.querySelector('#mouse-intensity-val'),
     camDistance: document.querySelector('#cam-distance'),
     camDistanceVal: document.querySelector('#cam-distance-val'),
     camHeight: document.querySelector('#cam-height'),

@@ -48,7 +48,7 @@ canvas {
   width: 260px;
   pointer-events: auto;
   z-index: 30;
-  max-height: calc(100vh - 72px);
+  max-height: calc(100vh - 50px);
   overflow-y: auto;
   overflow-x: hidden;
   padding: 10px 12px;
