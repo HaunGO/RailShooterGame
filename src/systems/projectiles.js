@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { createProjectile } from '../entities.js'
 
 const tmpForward = new THREE.Vector3()
+const tmpDirection = new THREE.Vector3()
 
 export function tryFireProjectile({
   state,
@@ -36,6 +37,10 @@ export function updateProjectiles({ projectiles, scene, dt, playerZ, projectileS
       p.mesh.position.x += p.velocity.x * dt
       p.mesh.position.y += p.velocity.y * dt
       p.mesh.position.z += p.velocity.z * dt
+      tmpDirection.copy(p.velocity).normalize()
+      if (tmpDirection.lengthSq() > 1e-6) {
+        p.mesh.quaternion.setFromUnitVectors(tmpForward.set(0, 1, 0), tmpDirection)
+      }
     } else {
       p.mesh.position.z += projectileSpeed * dt
     }

@@ -69,15 +69,18 @@ export function createDrone() {
 }
 
 export function createProjectile(isCharged = false) {
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(isCharged ? 0.25 : 0.15, 8, 8),
-    new THREE.MeshStandardMaterial({
-      color: isCharged ? 0xffe27a : 0x7ad7ff,
-      emissive: isCharged ? 0x3a2d00 : 0x002233,
-      flatShading: true,
-    })
-  )
-  return { mesh, radius: isCharged ? 0.3 : 0.2, isCharged }
+  const material = new THREE.MeshStandardMaterial({
+    color: isCharged ? 0xffe27a : 0x7cff2b,
+    emissive: isCharged ? 0x3a2d00 : 0x2a6b00,
+    flatShading: true,
+  })
+  let mesh
+  if (isCharged) {
+    mesh = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), material)
+  } else {
+    mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.4, 10, 1, true), material)
+  }
+  return { mesh, radius: isCharged ? 0.3 : 0.18, isCharged }
 }
 
 export function createRing() {

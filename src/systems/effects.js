@@ -18,17 +18,17 @@ export function createEffectsSystem(scene) {
     explosions.push(mesh)
   }
 
-  function addLaserBeam(start, end, { color = 0xff3344, opacity = 0.9 } = {}) {
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3))
-    geometry.attributes.position.setXYZ(0, start.x, start.y, start.z)
-    geometry.attributes.position.setXYZ(1, end.x, end.y, end.z)
-    geometry.attributes.position.needsUpdate = true
-
-    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity })
-    const beam = new THREE.Line(geometry, material)
+  function addLaserBeam(start, end, { color = 0xff3344, opacity = 0.9, radius = 0.06 } = {}) {
+    const direction = new THREE.Vector3().subVectors(end, start)
+    const length = direction.length()
+    if (length <= 1e-4) return
+    const geometry = new THREE.CylinderGeometry(radius, radius, length, 10, 1, true)
+    const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity })
+    const beam = new THREE.Mesh(geometry, material)
     beam.frustumCulled = false
     beam.userData.t = 0
+    beam.position.copy(start).addScaledVector(direction, 0.5)
+    beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize())
     scene.add(beam)
     lasers.push(beam)
   }

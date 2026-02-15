@@ -189,7 +189,8 @@ export function initGame({
   const forwardSpeed = 12 // units/sec (auto-forward rail)
   const boostMultiplier = 4.0
   const brakeMultiplier = 0.1
-  const projectileSpeed = 35
+  const projectileSpeed = 45
+  const laserBeamColor = 0x7cff2b
   const projectileCooldown = 0.18
   let fireCooldown = 0
   let nextShotId = 1
@@ -496,7 +497,7 @@ export function initGame({
   const resolveAutoLockHit = (target) => {
     tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
     tmpLaserOrigin.copy(player.group.position).addScaledVector(tmpForward, 1.3)
-    effects.addLaserBeam(tmpLaserOrigin, target.mesh.position, { color: 0xff3344, opacity: 0.9 })
+    effects.addLaserBeam(tmpLaserOrigin, target.mesh.position, { color: laserBeamColor, opacity: 0.9 })
     const shotId = nextShotId
     nextShotId += 1
     if (shotId !== nextExpectedHitId) {
