@@ -7,7 +7,7 @@
   "toggle-shadows": "Toggle fake circular shadows.",
   "toggle-levelmesh": "Show the grid/plane level mesh.",
   "toggle-laser": "Toggle the laser sight line.",
-  "toggle-auto-lock": "Enable auto-lock targeting logic.",
+  "toggle-auto-lock": "Hold R to lock and fire an instant laser at the closest target.",
   "toggle-auto-fire": "Auto-fire a single bolt when reticle locks.",
   "toggle-debug": "Show debug stats panel.",
   "reset-settings": "Restore defaults and reload."

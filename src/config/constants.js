@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 
-/** Central game design constants: bounds, speeds, timings, ship hit volume, laser, auto-lock, level mesh. */
+/** Central game design constants: bounds, speeds, timings, ship hit volume, laser, instant-laser lock, level mesh. */
 export const GAME_CONFIG = {
   bounds: { x: 15.75, y: 10.5 },
   groundClearance: 0.4,

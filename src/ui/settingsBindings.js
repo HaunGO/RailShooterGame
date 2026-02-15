@@ -174,14 +174,14 @@ export function bindSettingsUI({
     })
   }
 
-  // Auto lock
+  // Instant Laser
   if (toggleAutoLockButton) {
     const updateLabel = () => {
-      toggleAutoLockButton.textContent = state.autoLockEnabled ? 'Auto Lock: On' : 'Auto Lock: Off'
+      toggleAutoLockButton.textContent = state.instantLaserEnabled ? 'Instant Laser: On' : 'Instant Laser: Off'
     }
     updateLabel()
     toggleAutoLockButton.addEventListener('click', () => {
-      state.autoLockEnabled = !state.autoLockEnabled
+      state.instantLaserEnabled = !state.instantLaserEnabled
       updateLabel()
       emitSettings()
     })

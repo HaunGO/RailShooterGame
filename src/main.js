@@ -22,7 +22,9 @@ const loadSettings = () => {
   }
   try {
     const parsed = JSON.parse(stored)
-    return mergeSettings(defaults, parsed)
+    // Migrate old key for existing sessionStorage
+    const migrated = { ...parsed, instantLaserEnabled: parsed.instantLaserEnabled ?? parsed.autoLockEnabled }
+    return mergeSettings(defaults, migrated)
   } catch (err) {
     sessionStorage.setItem(SETTINGS_KEY, JSON.stringify(defaults))
     return mergeSettings(defaults, {})
@@ -55,7 +57,7 @@ app.innerHTML = `
         <button id="toggle-shadows" type="button">Shadows: Off</button>
         <button id="toggle-levelmesh" type="button">Level Mesh: On</button>
         <button id="toggle-laser" type="button">Laser Sight: On</button>
-        <button id="toggle-auto-lock" type="button">Auto Lock: Off</button>
+        <button id="toggle-auto-lock" type="button">Instant Laser: Off</button>
         <button id="toggle-auto-fire" type="button">Auto Fire: Off</button>
         <button id="reset-settings" type="button">Reset Settings</button>
         <button id="toggle-debug" type="button">Debug: Off</button>
@@ -94,7 +96,7 @@ app.innerHTML = `
     <div id="instructions">
       <div><strong>Move:</strong> WASD/Arrows or left stick</div>
       <div><strong>Fire:</strong> Space</div>
-      <div><strong>Auto-lock:</strong> R</div>
+      <div><strong>Instant Laser:</strong> R</div>
       <div><strong>Boost/Brake:</strong> E / Q</div>
       <div><strong>Roll:</strong> Shift</div>
       <div><strong>Barrel roll:</strong> Shift + Left/Right</div>

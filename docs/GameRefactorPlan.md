@@ -218,7 +218,7 @@ Work in order. After each step: run the game, do the step's verification checkli
 ### Step 3: UI settings bindings
 
 - **Do:** Create `src/ui/settingsBindings.js`. Implement `bindSettingsUI({ ... })` that receives all button/slider refs and mutable state (or get/set callbacks) for: menu, mouse, touch, instructions, invertY, hitboxes, shadows, levelMesh, laser, autoLock, autoFire, debug, and all tuning sliders. It should set initial labels from resolved settings, attach every click and `input` listener, and call `onSettingsChange` when anything changes. In game.js, replace the large block of toggle/slider setup with a single call to `bindSettingsUI(...)`, passing the same refs and state that you currently use. Keep game.js owning the state variables; bindings only read/write them and call `onSettingsChange`.
-- **Verify:** Open Menu; toggle every button (Mouse, Touch, HUD Tips, Invert Y, Hitboxes, Shadows, Level Mesh, Laser, Auto Lock, Auto Fire, Debug). Move every tuning slider. Reset Settings and reload; all toggles and slider values persist (sessionStorage). Labels update correctly.
+- **Verify:** Open Menu; toggle every button (Mouse, Touch, HUD Tips, Invert Y, Hitboxes, Shadows, Level Mesh, Laser, Instant Laser, Auto Fire, Debug). Move every tuning slider. Reset Settings and reload; all toggles and slider values persist (sessionStorage). Labels update correctly.
 - **Rollback:** Revert game.js to inline UI wiring; delete `ui/settingsBindings.js`.
 
 ### Step 4: Level mesh
@@ -278,3 +278,9 @@ Work in order. After each step: run the game, do the step's verification checkli
 - **Same public API** — `initGame(options)` signature and behavior unchanged so main.js does not need to change (only import path if you move something).
 
 This gives you a componentized, understandable codebase that preserves functionality and sets you up for higher goals (new weapons, levels, or modes) without touching a giant monolith.
+
+---
+
+## Follow-up (done)
+
+- **Renamed "Auto Lock" → "Instant Laser"** — UI button and instructions now say "Instant Laser: On/Off" and "Instant Laser: R"; tooltip describes hold R to lock and fire. Settings key renamed to `instantLaserEnabled` everywhere (defaults, state, emitSettings, sessionStorage); loadSettings migrates old `autoLockEnabled` from sessionStorage so existing preferences are preserved.

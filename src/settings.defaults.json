@@ -7,7 +7,7 @@
   "shadowsEnabled": true,
   "levelMeshEnabled": false,
   "laserEnabled": true,
-  "autoLockEnabled": true,
+  "instantLaserEnabled": true,
   "autoFireEnabled": false,
   "debugEnabled": false,
   "tuning": {
