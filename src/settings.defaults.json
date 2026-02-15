@@ -1,0 +1,22 @@
+{
+  "mouseMode": "off",
+  "touchMode": "auto",
+  "instructionsVisible": false,
+  "invertY": false,
+  "hitboxesEnabled": false,
+  "shadowsEnabled": true,
+  "levelMeshEnabled": false,
+  "laserEnabled": true,
+  "autoLockEnabled": true,
+  "autoFireEnabled": false,
+  "debugEnabled": false,
+  "tuning": {
+    "speedX": 6.0,
+    "speedY": 6.0,
+    "turnResponse": 3.0,
+    "rollStrafeMultiplier": 1.6,
+    "mouseIntensity": 6.0,
+    "camDistance": 10.0,
+    "camHeight": 1.8
+  }
+}

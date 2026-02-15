@@ -23,6 +23,8 @@ export function initGame({
   toggleAutoLockButton,
   toggleAutoFireButton,
   toggleDebugButton,
+  settings,
+  onSettingsChange,
   touchControls,
   touchStick,
   touchFire,
@@ -30,10 +32,11 @@ export function initGame({
   tuning,
   score,
 }) {
+  const resolvedSettings = settings ?? {}
   const debugEl = document.querySelector('#debug')
-  let debugEnabled = false
+  let debugEnabled = resolvedSettings.debugEnabled ?? false
   if (debugEl) {
-    debugEl.style.display = 'none'
+    debugEl.style.display = debugEnabled ? 'block' : 'none'
   }
 
   // Ensure the host container actually has a size.
@@ -94,7 +97,8 @@ export function initGame({
     touchFire,
     touchRoll,
   })
-  let mouseMode = 'off'
+  let emitSettings = () => {}
+  let mouseMode = resolvedSettings.mouseMode ?? 'off'
   input.setMouseMode(mouseMode)
   if (toggleMouseButton) {
     const updateLabel = () => {
@@ -105,12 +109,14 @@ export function initGame({
       mouseMode = mouseMode === 'off' ? 'normal' : 'off'
       input.setMouseMode(mouseMode)
       updateLabel()
+      emitSettings()
     })
   }
 
   const prefersTouch =
     (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window
-  let touchMode = prefersTouch ? 'stick' : 'off'
+  const storedTouchMode = resolvedSettings.touchMode ?? 'auto'
+  let touchMode = storedTouchMode === 'auto' ? (prefersTouch ? 'stick' : 'off') : storedTouchMode
   const updateTouchControls = () => {
     if (!touchControls) return
     touchControls.dataset.mode = touchMode
@@ -130,6 +136,7 @@ export function initGame({
       input.setTouchMode(touchMode)
       updateTouchControls()
       updateTouchLabel()
+      emitSettings()
     })
   }
 
@@ -154,7 +161,7 @@ export function initGame({
   }
 
   const instructionsEl = document.querySelector('#instructions')
-  let instructionsVisible = false
+  let instructionsVisible = resolvedSettings.instructionsVisible ?? false
   const updateInstructions = () => {
     if (instructionsEl) instructionsEl.style.display = instructionsVisible ? 'block' : 'none'
     if (toggleInstructionsButton) {
@@ -166,10 +173,11 @@ export function initGame({
     toggleInstructionsButton.addEventListener('click', () => {
       instructionsVisible = !instructionsVisible
       updateInstructions()
+      emitSettings()
     })
   }
 
-  let invertY = false
+  let invertY = resolvedSettings.invertY ?? false
   const updateInvertLabel = () => {
     if (toggleInvertYButton) {
       toggleInvertYButton.textContent = invertY ? 'Invert Y: On' : 'Invert Y: Off'
@@ -180,6 +188,7 @@ export function initGame({
     toggleInvertYButton.addEventListener('click', () => {
       invertY = !invertY
       updateInvertLabel()
+      emitSettings()
     })
   }
   const bounds = { x: 15.75, y: 10.5 }
@@ -250,11 +259,11 @@ export function initGame({
   const effects = createEffectsSystem(scene)
   const scoreSystem = createScoreSystem(score ?? {})
   const shipVelocity = new THREE.Vector3()
-  let hitboxesEnabled = false
-  let shadowsEnabled = true
-  let laserEnabled = true
-  let autoLockEnabled = true
-  let autoFireEnabled = false
+  let hitboxesEnabled = resolvedSettings.hitboxesEnabled ?? false
+  let shadowsEnabled = resolvedSettings.shadowsEnabled ?? true
+  let laserEnabled = resolvedSettings.laserEnabled ?? true
+  let autoLockEnabled = resolvedSettings.autoLockEnabled ?? true
+  let autoFireEnabled = resolvedSettings.autoFireEnabled ?? false
   const autoLockAcquireDistance = 75
   let currentAutoLockTarget = null
   let autoFireLockedTarget = null
@@ -302,6 +311,7 @@ export function initGame({
       shipHitboxGroup.visible = hitboxesEnabled
       refreshTargetHitboxes()
       toggleHitboxesButton.textContent = hitboxesEnabled ? 'Hitboxes: On' : 'Hitboxes: Off'
+      emitSettings()
     })
   }
 
@@ -358,7 +368,7 @@ export function initGame({
     mat.emissiveIntensity = 0.9
   }
 
-  let levelMeshEnabled = false
+  let levelMeshEnabled = resolvedSettings.levelMeshEnabled ?? false
   const levelWidth = 80
   const levelSegments = []
   for (let i = 0; i < envState.segmentCount; i += 1) {
@@ -416,6 +426,7 @@ export function initGame({
       playerShadow.visible = shadowsEnabled
       refreshTargetShadows()
       toggleShadowsButton.textContent = shadowsEnabled ? 'Shadows: On' : 'Shadows: Off'
+      emitSettings()
     })
   }
 
@@ -425,6 +436,7 @@ export function initGame({
       levelMeshEnabled = !levelMeshEnabled
       setLevelMeshVisible(levelMeshEnabled)
       toggleLevelMeshButton.textContent = levelMeshEnabled ? 'Level Mesh: On' : 'Level Mesh: Off'
+      emitSettings()
     })
   }
 
@@ -441,6 +453,7 @@ export function initGame({
         clearLaserHighlight()
       }
       updateLabel()
+      emitSettings()
     })
   }
 
@@ -536,6 +549,7 @@ export function initGame({
     toggleAutoLockButton.addEventListener('click', () => {
       autoLockEnabled = !autoLockEnabled
       updateLabel()
+      emitSettings()
     })
   }
 
@@ -547,6 +561,7 @@ export function initGame({
     toggleAutoFireButton.addEventListener('click', () => {
       autoFireEnabled = !autoFireEnabled
       updateLabel()
+      emitSettings()
     })
   }
 
@@ -560,24 +575,54 @@ export function initGame({
     toggleDebugButton.addEventListener('click', () => {
       debugEnabled = !debugEnabled
       updateLabel()
+      emitSettings()
     })
   }
 
   const tuningState = {
-    speedX: baseSpeedX,
-    speedY: baseSpeedY,
+    speedX: resolvedSettings.tuning?.speedX ?? baseSpeedX,
+    speedY: resolvedSettings.tuning?.speedY ?? baseSpeedY,
     // UI scale 1..10. We'll map it to an internal lerp factor.
-    turnResponse: 3.0,
-    rollStrafeMultiplier: baseRollStrafeMultiplier,
-    camDistance: 10.0,
-    camHeight: 1.8,
+    turnResponse: resolvedSettings.tuning?.turnResponse ?? 3.0,
+    rollStrafeMultiplier: resolvedSettings.tuning?.rollStrafeMultiplier ?? baseRollStrafeMultiplier,
+    camDistance: resolvedSettings.tuning?.camDistance ?? 10.0,
+    camHeight: resolvedSettings.tuning?.camHeight ?? 1.8,
+  }
+  let mouseIntensity = resolvedSettings.tuning?.mouseIntensity ?? 6.0
+
+  emitSettings = () => {
+    if (!onSettingsChange) return
+    onSettingsChange({
+      mouseMode,
+      touchMode,
+      instructionsVisible,
+      invertY,
+      hitboxesEnabled,
+      shadowsEnabled,
+      levelMeshEnabled,
+      laserEnabled,
+      autoLockEnabled,
+      autoFireEnabled,
+      debugEnabled,
+      tuning: {
+        speedX: tuningState.speedX,
+        speedY: tuningState.speedY,
+        turnResponse: tuningState.turnResponse,
+        rollStrafeMultiplier: tuningState.rollStrafeMultiplier,
+        mouseIntensity,
+        camDistance: tuningState.camDistance,
+        camHeight: tuningState.camHeight,
+      },
+    })
   }
 
   if (tuning?.speedX) {
     const sync = () => {
       tuningState.speedX = Number(tuning.speedX.value)
       if (tuning.speedXVal) tuning.speedXVal.textContent = tuningState.speedX.toFixed(1)
+      emitSettings()
     }
+    tuning.speedX.value = tuningState.speedX
     tuning.speedX.addEventListener('input', sync)
     sync()
   }
@@ -585,7 +630,9 @@ export function initGame({
     const sync = () => {
       tuningState.speedY = Number(tuning.speedY.value)
       if (tuning.speedYVal) tuning.speedYVal.textContent = tuningState.speedY.toFixed(1)
+      emitSettings()
     }
+    tuning.speedY.value = tuningState.speedY
     tuning.speedY.addEventListener('input', sync)
     sync()
   }
@@ -593,7 +640,9 @@ export function initGame({
     const sync = () => {
       tuningState.turnResponse = Number(tuning.turnResponse.value)
       if (tuning.turnResponseVal) tuning.turnResponseVal.textContent = tuningState.turnResponse.toFixed(1)
+      emitSettings()
     }
+    tuning.turnResponse.value = tuningState.turnResponse
     tuning.turnResponse.addEventListener('input', sync)
     sync()
   }
@@ -601,18 +650,23 @@ export function initGame({
     const sync = () => {
       tuningState.rollStrafeMultiplier = Number(tuning.rollStrafe.value)
       if (tuning.rollStrafeVal) tuning.rollStrafeVal.textContent = tuningState.rollStrafeMultiplier.toFixed(1)
+      emitSettings()
     }
+    tuning.rollStrafe.value = tuningState.rollStrafeMultiplier
     tuning.rollStrafe.addEventListener('input', sync)
     sync()
   }
   if (tuning?.mouseIntensity) {
     const sync = () => {
       const value = Number(tuning.mouseIntensity.value)
+      mouseIntensity = value
       if (tuning.mouseIntensityVal) tuning.mouseIntensityVal.textContent = value.toFixed(1)
       // Map 1..10 -> 0.5..3.0 (10 is very tight)
       const sensitivity = 0.5 + (value / 10) * 2.5
       input.setMouseSensitivity(sensitivity)
+      emitSettings()
     }
+    tuning.mouseIntensity.value = mouseIntensity
     tuning.mouseIntensity.addEventListener('input', sync)
     sync()
   }
@@ -621,7 +675,9 @@ export function initGame({
       const value = Number(tuning.camDistance.value)
       tuningState.camDistance = value
       if (tuning.camDistanceVal) tuning.camDistanceVal.textContent = value.toFixed(1)
+      emitSettings()
     }
+    tuning.camDistance.value = tuningState.camDistance
     tuning.camDistance.addEventListener('input', sync)
     sync()
   }
@@ -630,7 +686,9 @@ export function initGame({
       const value = Number(tuning.camHeight.value)
       tuningState.camHeight = value
       if (tuning.camHeightVal) tuning.camHeightVal.textContent = value.toFixed(1)
+      emitSettings()
     }
+    tuning.camHeight.value = tuningState.camHeight
     tuning.camHeight.addEventListener('input', sync)
     sync()
   }

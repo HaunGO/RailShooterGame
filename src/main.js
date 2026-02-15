@@ -1,5 +1,37 @@
 import './style.css'
+import defaults from './settings.defaults.json'
+import descriptions from './settings.descriptions.json'
 import { initGame } from './game.js'
+
+const SETTINGS_KEY = 'railShooter.settings'
+
+const mergeSettings = (base, override) => ({
+  ...base,
+  ...override,
+  tuning: {
+    ...base.tuning,
+    ...(override?.tuning ?? {}),
+  },
+})
+
+const loadSettings = () => {
+  const stored = sessionStorage.getItem(SETTINGS_KEY)
+  if (!stored) {
+    sessionStorage.setItem(SETTINGS_KEY, JSON.stringify(defaults))
+    return mergeSettings(defaults, {})
+  }
+  try {
+    const parsed = JSON.parse(stored)
+    return mergeSettings(defaults, parsed)
+  } catch (err) {
+    sessionStorage.setItem(SETTINGS_KEY, JSON.stringify(defaults))
+    return mergeSettings(defaults, {})
+  }
+}
+
+const saveSettings = (settings) => {
+  sessionStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+}
 
 const app = document.querySelector('#app')
 app.innerHTML = `
@@ -25,6 +57,7 @@ app.innerHTML = `
         <button id="toggle-laser" type="button">Laser Sight: On</button>
         <button id="toggle-auto-lock" type="button">Auto Lock: Off</button>
         <button id="toggle-auto-fire" type="button">Auto Fire: Off</button>
+        <button id="reset-settings" type="button">Reset Settings</button>
         <button id="toggle-debug" type="button">Debug: Off</button>
       </div>
       <div id="tuning">
@@ -75,6 +108,26 @@ app.innerHTML = `
   </div>
 `
 
+const applySettingTooltips = () => {
+  if (!descriptions) return
+  for (const [id, text] of Object.entries(descriptions)) {
+    const el = document.querySelector(`#${id}`)
+    if (!el) continue
+    el.setAttribute('title', String(text))
+  }
+}
+
+applySettingTooltips()
+
+const settings = loadSettings()
+const resetSettingsButton = document.querySelector('#reset-settings')
+if (resetSettingsButton) {
+  resetSettingsButton.addEventListener('click', () => {
+    sessionStorage.setItem(SETTINGS_KEY, JSON.stringify(defaults))
+    window.location.reload()
+  })
+}
+
 initGame({
   container: app,
   menuButton: document.querySelector('#menu-button'),
@@ -89,6 +142,8 @@ initGame({
   toggleAutoLockButton: document.querySelector('#toggle-auto-lock'),
   toggleAutoFireButton: document.querySelector('#toggle-auto-fire'),
   toggleDebugButton: document.querySelector('#toggle-debug'),
+  settings,
+  onSettingsChange: saveSettings,
   touchControls: document.querySelector('#touch-controls'),
   touchStick: document.querySelector('#touch-stick'),
   touchFire: document.querySelector('#touch-fire'),
