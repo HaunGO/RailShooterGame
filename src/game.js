@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { InputManager } from './input.js'
-import { createPlayer } from './entities.js'
+import { createPlayer, createProjectile } from './entities.js'
 import { createEnvironment, updateEnvironment } from './systems/environment.js'
 import { createReticleSystem } from './systems/reticle.js'
 import { attachAutoLockIndicator, attachTargetHitbox, updateTargets } from './systems/targets.js'
@@ -21,6 +21,7 @@ export function initGame({
   toggleLevelMeshButton,
   toggleLaserButton,
   toggleAutoLockButton,
+  toggleAutoFireButton,
   toggleDebugButton,
   touchControls,
   touchStick,
@@ -253,8 +254,11 @@ export function initGame({
   let shadowsEnabled = true
   let laserEnabled = true
   let autoLockEnabled = true
+  let autoFireEnabled = false
   const autoLockAcquireDistance = 75
   let currentAutoLockTarget = null
+  let autoFireLockedTarget = null
+  let autoFirePendingTarget = null
   const shadowMaterial = new THREE.MeshBasicMaterial({
     color: 0x000000,
     transparent: true,
@@ -512,6 +516,18 @@ export function initGame({
     effects.addExplosion(target.mesh.position, { color: 0xfff1a6, radius: 0.6 })
   }
 
+  const fireAimedProjectile = (target) => {
+    const proj = createProjectile(false)
+    tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
+    proj.mesh.position.copy(player.group.position).addScaledVector(tmpForward, 2.2)
+    tmpToTarget.copy(target.mesh.position).sub(proj.mesh.position).normalize()
+    proj.velocity = tmpToTarget.clone().multiplyScalar(projectileSpeed)
+    scene.add(proj.mesh)
+    projectiles.push(proj)
+    proj.shotId = nextShotId
+    nextShotId += 1
+  }
+
   if (toggleAutoLockButton) {
     const updateLabel = () => {
       toggleAutoLockButton.textContent = autoLockEnabled ? 'Auto Lock: On' : 'Auto Lock: Off'
@@ -519,6 +535,17 @@ export function initGame({
     updateLabel()
     toggleAutoLockButton.addEventListener('click', () => {
       autoLockEnabled = !autoLockEnabled
+      updateLabel()
+    })
+  }
+
+  if (toggleAutoFireButton) {
+    const updateLabel = () => {
+      toggleAutoFireButton.textContent = autoFireEnabled ? 'Auto Fire: On' : 'Auto Fire: Off'
+    }
+    updateLabel()
+    toggleAutoFireButton.addEventListener('click', () => {
+      autoFireEnabled = !autoFireEnabled
       updateLabel()
     })
   }
@@ -843,7 +870,13 @@ export function initGame({
       }
 
       // Reticle = ship boresight (nose direction) projected to screen.
-      updateReticle(reticleEl, player)
+      const reticleTarget = updateReticle(reticleEl, player, targets)
+      if (reticleTarget !== autoFireLockedTarget) {
+        autoFireLockedTarget = reticleTarget
+        autoFirePendingTarget = reticleTarget
+      } else if (!reticleTarget) {
+        autoFirePendingTarget = null
+      }
       if (laserEnabled) {
         // Laser sight: ray from nose to closest target (or max distance).
         tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
@@ -904,6 +937,7 @@ export function initGame({
       // Fire (space) / Auto-lock (R by default)
       fireCooldown = Math.max(0, fireCooldown - dt)
       const wantsFire = state.fire.pressed || state.fire.held
+      const wantsAutoFire = autoFireEnabled && autoFirePendingTarget
       const wantsAutoLock = state.laser.held
       if (autoLockEnabled && wantsAutoLock && fireCooldown <= 0) {
         const target = currentAutoLockTarget
@@ -912,6 +946,10 @@ export function initGame({
           currentAutoLockTarget = null
           fireCooldown = projectileCooldown
         }
+      } else if (wantsAutoFire && fireCooldown <= 0) {
+        fireAimedProjectile(autoFirePendingTarget)
+        autoFirePendingTarget = null
+        fireCooldown = projectileCooldown
       } else {
         fireCooldown = tryFireProjectile({
           state,

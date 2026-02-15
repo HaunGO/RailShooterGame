@@ -142,6 +142,11 @@ canvas {
   border-radius: 50%;
 }
 
+#reticle.reticle--lock {
+  border-color: rgba(255, 72, 72, 0.95);
+  box-shadow: 0 0 8px rgba(255, 72, 72, 0.6);
+}
+
 
 #score-panel {
   position: absolute;

@@ -24,6 +24,7 @@ app.innerHTML = `
         <button id="toggle-levelmesh" type="button">Level Mesh: On</button>
         <button id="toggle-laser" type="button">Laser Sight: On</button>
         <button id="toggle-auto-lock" type="button">Auto Lock: Off</button>
+        <button id="toggle-auto-fire" type="button">Auto Fire: Off</button>
         <button id="toggle-debug" type="button">Debug: Off</button>
       </div>
       <div id="tuning">
@@ -86,6 +87,7 @@ initGame({
   toggleLevelMeshButton: document.querySelector('#toggle-levelmesh'),
   toggleLaserButton: document.querySelector('#toggle-laser'),
   toggleAutoLockButton: document.querySelector('#toggle-auto-lock'),
+  toggleAutoFireButton: document.querySelector('#toggle-auto-fire'),
   toggleDebugButton: document.querySelector('#toggle-debug'),
   touchControls: document.querySelector('#touch-controls'),
   touchStick: document.querySelector('#touch-stick'),
