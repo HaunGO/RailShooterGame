@@ -1,4 +1,6 @@
 import * as THREE from 'three'
+import { GAME_CONFIG, loopForwardCarry, shipHitSpheres } from './config/constants.js'
+import { createCore } from './core/renderer.js'
 import { InputManager } from './input.js'
 import { createPlayer, createProjectile } from './entities.js'
 import { createEnvironment, updateEnvironment } from './systems/environment.js'
@@ -8,6 +10,7 @@ import { tryFireProjectile, updateProjectiles } from './systems/projectiles.js'
 import { createEffectsSystem } from './systems/effects.js'
 import { handleProjectileTargetCollisions, handleTargetShipCollisions } from './systems/collisions.js'
 import { createScoreSystem } from './systems/score.js'
+import { bindSettingsUI } from './ui/settingsBindings.js'
 
 export function initGame({
   container,
@@ -34,9 +37,30 @@ export function initGame({
 }) {
   const resolvedSettings = settings ?? {}
   const debugEl = document.querySelector('#debug')
-  let debugEnabled = resolvedSettings.debugEnabled ?? false
+  const settingsPanel = document.querySelector('#debug-panel')
+  const instructionsEl = document.querySelector('#instructions')
+  const state = {
+    mouseMode: resolvedSettings.mouseMode ?? 'off',
+    touchMode: (() => {
+      const prefersTouch =
+        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+        'ontouchstart' in window
+      const stored = resolvedSettings.touchMode ?? 'auto'
+      return stored === 'auto' ? (prefersTouch ? 'stick' : 'off') : stored
+    })(),
+    settingsOpen: settingsPanel ? settingsPanel.dataset.open !== 'false' : true,
+    instructionsVisible: resolvedSettings.instructionsVisible ?? false,
+    invertY: resolvedSettings.invertY ?? false,
+    hitboxesEnabled: resolvedSettings.hitboxesEnabled ?? false,
+    shadowsEnabled: resolvedSettings.shadowsEnabled ?? true,
+    levelMeshEnabled: resolvedSettings.levelMeshEnabled ?? false,
+    laserEnabled: resolvedSettings.laserEnabled ?? true,
+    autoLockEnabled: resolvedSettings.autoLockEnabled ?? true,
+    autoFireEnabled: resolvedSettings.autoFireEnabled ?? false,
+    debugEnabled: resolvedSettings.debugEnabled ?? false,
+  }
   if (debugEl) {
-    debugEl.style.display = debugEnabled ? 'block' : 'none'
+    debugEl.style.display = state.debugEnabled ? 'block' : 'none'
   }
 
   // Ensure the host container actually has a size.
@@ -44,45 +68,9 @@ export function initGame({
   container.style.width = '100vw'
   container.style.height = '100vh'
 
-  let renderer
-  try {
-    renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: 'high-performance',
-      alpha: false,
-      preserveDrawingBuffer: false,
-    })
-  } catch (err) {
-    if (debugEl) {
-      debugEl.textContent = `WebGLRenderer failed: ${err?.message ?? String(err)}`
-    }
-    return
-  }
-
-  renderer.setSize(window.innerWidth, window.innerHeight)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  renderer.outputColorSpace = THREE.SRGBColorSpace
-  renderer.setClearColor(0x0b1020, 1)
-  renderer.domElement.style.position = 'absolute'
-  renderer.domElement.style.left = '0'
-  renderer.domElement.style.top = '0'
-  renderer.domElement.style.width = '100%'
-  renderer.domElement.style.height = '100%'
-  renderer.domElement.style.zIndex = '1'
-  renderer.domElement.id = 'three-canvas'
-  container.prepend(renderer.domElement)
-
-  const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x0b1020)
-
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500)
-  camera.position.set(0, 1.8, -10)
-
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.6)
-  keyLight.position.set(6, 10, -6)
-  scene.add(keyLight)
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55))
-  scene.add(new THREE.HemisphereLight(0xbad3ff, 0x203050, 0.45))
+  const core = createCore(container, debugEl)
+  if (!core) return
+  const { renderer, scene, camera } = core
 
   // Simple "fly through" floor segments for motion cues.
   const envState = createEnvironment(scene)
@@ -97,111 +85,21 @@ export function initGame({
     touchFire,
     touchRoll,
   })
+  const tuningState = {
+    speedX: resolvedSettings.tuning?.speedX ?? GAME_CONFIG.baseSpeedX,
+    speedY: resolvedSettings.tuning?.speedY ?? GAME_CONFIG.baseSpeedY,
+    turnResponse: resolvedSettings.tuning?.turnResponse ?? 3.0,
+    rollStrafeMultiplier:
+      resolvedSettings.tuning?.rollStrafeMultiplier ?? GAME_CONFIG.baseRollStrafeMultiplier,
+    camDistance: resolvedSettings.tuning?.camDistance ?? 10.0,
+    camHeight: resolvedSettings.tuning?.camHeight ?? 1.8,
+  }
+  const mouseIntensityRef = { value: resolvedSettings.tuning?.mouseIntensity ?? 6.0 }
+  input.setMouseMode(state.mouseMode)
+  input.setTouchMode(state.touchMode)
   let emitSettings = () => {}
-  let mouseMode = resolvedSettings.mouseMode ?? 'off'
-  input.setMouseMode(mouseMode)
-  if (toggleMouseButton) {
-    const updateLabel = () => {
-      toggleMouseButton.textContent = mouseMode === 'off' ? 'Mouse Aim: Off' : 'Mouse Aim: On'
-    }
-    updateLabel()
-    toggleMouseButton.addEventListener('click', () => {
-      mouseMode = mouseMode === 'off' ? 'normal' : 'off'
-      input.setMouseMode(mouseMode)
-      updateLabel()
-      emitSettings()
-    })
-  }
-
-  const prefersTouch =
-    (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window
-  const storedTouchMode = resolvedSettings.touchMode ?? 'auto'
-  let touchMode = storedTouchMode === 'auto' ? (prefersTouch ? 'stick' : 'off') : storedTouchMode
-  const updateTouchControls = () => {
-    if (!touchControls) return
-    touchControls.dataset.mode = touchMode
-  }
-  const updateTouchLabel = () => {
-    if (!toggleTouchButton) return
-    const label =
-      touchMode === 'off' ? 'Touch: Off' : touchMode === 'drag' ? 'Touch: Drag' : 'Touch: Stick'
-    toggleTouchButton.textContent = label
-  }
-  input.setTouchMode(touchMode)
-  updateTouchControls()
-  updateTouchLabel()
-  if (toggleTouchButton) {
-    toggleTouchButton.addEventListener('click', () => {
-      touchMode = touchMode === 'off' ? 'stick' : touchMode === 'stick' ? 'drag' : 'off'
-      input.setTouchMode(touchMode)
-      updateTouchControls()
-      updateTouchLabel()
-      emitSettings()
-    })
-  }
-
-  const settingsPanel = document.querySelector('#debug-panel')
-  let settingsOpen = settingsPanel ? settingsPanel.dataset.open !== 'false' : true
-  const updateSettingsPanel = () => {
-    if (!settingsPanel) return
-    settingsPanel.dataset.open = settingsOpen ? 'true' : 'false'
-  }
-  const updateMenuLabel = () => {
-    if (!menuButton) return
-    menuButton.textContent = settingsOpen ? 'Close' : 'Menu'
-  }
-  updateSettingsPanel()
-  updateMenuLabel()
-  if (menuButton) {
-    menuButton.addEventListener('click', () => {
-      settingsOpen = !settingsOpen
-      updateSettingsPanel()
-      updateMenuLabel()
-    })
-  }
-
-  const instructionsEl = document.querySelector('#instructions')
-  let instructionsVisible = resolvedSettings.instructionsVisible ?? false
-  const updateInstructions = () => {
-    if (instructionsEl) instructionsEl.style.display = instructionsVisible ? 'block' : 'none'
-    if (toggleInstructionsButton) {
-      toggleInstructionsButton.textContent = instructionsVisible ? 'HUD Tips: On' : 'HUD Tips: Off'
-    }
-  }
-  updateInstructions()
-  if (toggleInstructionsButton) {
-    toggleInstructionsButton.addEventListener('click', () => {
-      instructionsVisible = !instructionsVisible
-      updateInstructions()
-      emitSettings()
-    })
-  }
-
-  let invertY = resolvedSettings.invertY ?? false
-  const updateInvertLabel = () => {
-    if (toggleInvertYButton) {
-      toggleInvertYButton.textContent = invertY ? 'Invert Y: On' : 'Invert Y: Off'
-    }
-  }
-  updateInvertLabel()
-  if (toggleInvertYButton) {
-    toggleInvertYButton.addEventListener('click', () => {
-      invertY = !invertY
-      updateInvertLabel()
-      emitSettings()
-    })
-  }
-  const bounds = { x: 15.75, y: 10.5 }
-  const groundClearance = 0.4
-  const minY = envState.floorY + groundClearance
-  const baseSpeedX = 6.0 // units/sec
-  const baseSpeedY = 6.0 // units/sec
-  const forwardSpeed = 12 // units/sec (auto-forward rail)
-  const boostMultiplier = 4.0
-  const brakeMultiplier = 0.1
-  const projectileSpeed = 45
-  const laserBeamColor = 0x7cff2b
-  const projectileCooldown = 0.18
+  const bounds = GAME_CONFIG.bounds
+  const minY = envState.floorY + GAME_CONFIG.groundClearance
   let fireCooldown = 0
   let nextShotId = 1
   let nextExpectedHitId = 1
@@ -209,7 +107,6 @@ export function initGame({
   const targets = []
   let targetSpawnTimer = 0
   let playerHitTimer = 0
-  const playerHitInvuln = 1
   let barrelRollTimer = 0
   let barrelRollDir = 0
   let barrelRollStartZ = 0
@@ -229,23 +126,6 @@ export function initGame({
   const loopForward = new THREE.Vector3()
   const loopRight = new THREE.Vector3()
   const loopWorldUp = new THREE.Vector3(0, 1, 0)
-  const barrelRollDuration = 1.0
-  const barrelRollCooldownTime = 0.5
-  const baseRollStrafeMultiplier = 1.6
-  const loopDuration = 2.5
-  const loopCooldownTime = 0.5
-  const loopRadius = 7
-  const loopBlendInDuration = 0.35
-  const loopBlendOutDuration = 0
-  const loopForwardCarry = forwardSpeed * loopDuration
-  // Approximate the paper-airplane shape with multiple spheres in ship-local space.
-  const shipHitSpheres = [
-    { offset: new THREE.Vector3(0, 0.1, 1.6), radius: 0.55 }, // nose
-    { offset: new THREE.Vector3(0, 0.15, 0.3), radius: 0.9 }, // center mass
-    { offset: new THREE.Vector3(0, 0.12, -1.0), radius: 0.65 }, // tail
-    { offset: new THREE.Vector3(-1.4, 0.0, 0.7), radius: 0.6 }, // left wing
-    { offset: new THREE.Vector3(1.4, 0.0, 0.7), radius: 0.6 }, // right wing
-  ]
   const tmpSphereCenter = new THREE.Vector3()
   const tmpToTarget = new THREE.Vector3()
   const tmpForward = new THREE.Vector3()
@@ -259,12 +139,6 @@ export function initGame({
   const effects = createEffectsSystem(scene)
   const scoreSystem = createScoreSystem(score ?? {})
   const shipVelocity = new THREE.Vector3()
-  let hitboxesEnabled = resolvedSettings.hitboxesEnabled ?? false
-  let shadowsEnabled = resolvedSettings.shadowsEnabled ?? true
-  let laserEnabled = resolvedSettings.laserEnabled ?? true
-  let autoLockEnabled = resolvedSettings.autoLockEnabled ?? true
-  let autoFireEnabled = resolvedSettings.autoFireEnabled ?? false
-  const autoLockAcquireDistance = 75
   let currentAutoLockTarget = null
   let autoFireLockedTarget = null
   let autoFirePendingTarget = null
@@ -289,13 +163,13 @@ export function initGame({
     hb.position.copy(sphere.offset)
     shipHitboxGroup.add(hb)
   }
-  shipHitboxGroup.visible = hitboxesEnabled
+  shipHitboxGroup.visible = state.hitboxesEnabled
   player.group.add(shipHitboxGroup)
 
   const refreshTargetHitboxes = () => {
     for (let i = 0; i < targets.length; i += 1) {
       const t = targets[i]
-      if (hitboxesEnabled) {
+      if (state.hitboxesEnabled) {
         attachTargetHitbox(t)
         t.hitbox.visible = true
       } else if (t.hitbox) {
@@ -304,23 +178,11 @@ export function initGame({
     }
   }
 
-  if (toggleHitboxesButton) {
-    toggleHitboxesButton.textContent = hitboxesEnabled ? 'Hitboxes: On' : 'Hitboxes: Off'
-    toggleHitboxesButton.addEventListener('click', () => {
-      hitboxesEnabled = !hitboxesEnabled
-      shipHitboxGroup.visible = hitboxesEnabled
-      refreshTargetHitboxes()
-      toggleHitboxesButton.textContent = hitboxesEnabled ? 'Hitboxes: On' : 'Hitboxes: Off'
-      emitSettings()
-    })
-  }
-
   const playerShadow = new THREE.Mesh(new THREE.CircleGeometry(1.1, 20), shadowMaterial)
   playerShadow.rotation.x = -Math.PI / 2
-  playerShadow.visible = shadowsEnabled
+  playerShadow.visible = state.shadowsEnabled
   scene.add(playerShadow)
 
-  const laserMaxDistance = 120
   const laserLineGeometry = new THREE.BufferGeometry()
   laserLineGeometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3))
   const laserLine = new THREE.Line(
@@ -328,7 +190,7 @@ export function initGame({
     new THREE.LineBasicMaterial({ color: 0xff3344, transparent: true, opacity: 0.65 })
   )
   laserLine.frustumCulled = false
-  laserLine.visible = laserEnabled
+  laserLine.visible = state.laserEnabled
   scene.add(laserLine)
   const laserHit = new THREE.Mesh(
     new THREE.SphereGeometry(0.08, 8, 8),
@@ -337,7 +199,7 @@ export function initGame({
   laserHit.visible = false
   scene.add(laserHit)
   const laserRaycaster = new THREE.Raycaster()
-  laserRaycaster.far = laserMaxDistance
+  laserRaycaster.far = GAME_CONFIG.laserMaxDistance
   let laserTarget = null
 
   const clearLaserHighlight = () => {
@@ -368,12 +230,10 @@ export function initGame({
     mat.emissiveIntensity = 0.9
   }
 
-  let levelMeshEnabled = resolvedSettings.levelMeshEnabled ?? false
-  const levelWidth = 80
   const levelSegments = []
   for (let i = 0; i < envState.segmentCount; i += 1) {
     const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(levelWidth, envState.segmentLength, 1, 1),
+      new THREE.PlaneGeometry(GAME_CONFIG.levelWidth, envState.segmentLength, 1, 1),
       new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 })
     )
     plane.rotation.x = -Math.PI / 2
@@ -381,7 +241,7 @@ export function initGame({
     scene.add(plane)
 
     const grid = new THREE.Mesh(
-      new THREE.PlaneGeometry(levelWidth, envState.segmentLength, 20, 10),
+      new THREE.PlaneGeometry(GAME_CONFIG.levelWidth, envState.segmentLength, 20, 10),
       new THREE.MeshBasicMaterial({
         color: 0x5ac8ff,
         wireframe: true,
@@ -401,12 +261,12 @@ export function initGame({
       levelSegments[i].grid.visible = value
     }
   }
-  setLevelMeshVisible(levelMeshEnabled)
+  setLevelMeshVisible(state.levelMeshEnabled)
 
   const refreshTargetShadows = () => {
     for (let i = 0; i < targets.length; i += 1) {
       const t = targets[i]
-      if (shadowsEnabled) {
+      if (state.shadowsEnabled) {
         if (!t.shadow) {
           t.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 16), shadowMaterial)
           t.shadow.rotation.x = -Math.PI / 2
@@ -417,44 +277,6 @@ export function initGame({
         t.shadow.visible = false
       }
     }
-  }
-
-  if (toggleShadowsButton) {
-    toggleShadowsButton.textContent = shadowsEnabled ? 'Shadows: On' : 'Shadows: Off'
-    toggleShadowsButton.addEventListener('click', () => {
-      shadowsEnabled = !shadowsEnabled
-      playerShadow.visible = shadowsEnabled
-      refreshTargetShadows()
-      toggleShadowsButton.textContent = shadowsEnabled ? 'Shadows: On' : 'Shadows: Off'
-      emitSettings()
-    })
-  }
-
-  if (toggleLevelMeshButton) {
-    toggleLevelMeshButton.textContent = levelMeshEnabled ? 'Level Mesh: On' : 'Level Mesh: Off'
-    toggleLevelMeshButton.addEventListener('click', () => {
-      levelMeshEnabled = !levelMeshEnabled
-      setLevelMeshVisible(levelMeshEnabled)
-      toggleLevelMeshButton.textContent = levelMeshEnabled ? 'Level Mesh: On' : 'Level Mesh: Off'
-      emitSettings()
-    })
-  }
-
-  if (toggleLaserButton) {
-    const updateLabel = () => {
-      toggleLaserButton.textContent = laserEnabled ? 'Laser Sight: On' : 'Laser Sight: Off'
-    }
-    updateLabel()
-    toggleLaserButton.addEventListener('click', () => {
-      laserEnabled = !laserEnabled
-      laserLine.visible = laserEnabled
-      if (!laserEnabled) {
-        laserHit.visible = false
-        clearLaserHighlight()
-      }
-      updateLabel()
-      emitSettings()
-    })
   }
 
   const ensureAutoLockState = (target) => {
@@ -468,18 +290,18 @@ export function initGame({
   }
 
   const updateAutoLockEligibility = (playerZ) => {
-    if (!autoLockEnabled) return
+    if (!state.autoLockEnabled) return
     for (let i = 0; i < targets.length; i += 1) {
       const t = targets[i]
       ensureAutoLockState(t)
-      if (!t.autoLock.eligible && t.mesh.position.z - playerZ <= autoLockAcquireDistance) {
+      if (!t.autoLock.eligible && t.mesh.position.z - playerZ <= GAME_CONFIG.autoLockAcquireDistance) {
         t.autoLock.eligible = true
       }
     }
   }
 
   const updateAutoLockTargeting = (playerZ) => {
-    if (!autoLockEnabled) {
+    if (!state.autoLockEnabled) {
       currentAutoLockTarget = null
       for (let i = 0; i < targets.length; i += 1) {
         const t = targets[i]
@@ -514,7 +336,7 @@ export function initGame({
   const resolveAutoLockHit = (target) => {
     tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
     tmpLaserOrigin.copy(player.group.position).addScaledVector(tmpForward, 1.3)
-    effects.addLaserBeam(tmpLaserOrigin, target.mesh.position, { color: laserBeamColor, opacity: 0.9 })
+    effects.addLaserBeam(tmpLaserOrigin, target.mesh.position, { color: GAME_CONFIG.laserBeamColor, opacity: 0.9 })
     const shotId = nextShotId
     nextShotId += 1
     if (shotId !== nextExpectedHitId) {
@@ -534,164 +356,83 @@ export function initGame({
     tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
     proj.mesh.position.copy(player.group.position).addScaledVector(tmpForward, 2.2)
     tmpToTarget.copy(target.mesh.position).sub(proj.mesh.position).normalize()
-    proj.velocity = tmpToTarget.clone().multiplyScalar(projectileSpeed)
+    proj.velocity = tmpToTarget.clone().multiplyScalar(GAME_CONFIG.projectileSpeed)
     scene.add(proj.mesh)
     projectiles.push(proj)
     proj.shotId = nextShotId
     nextShotId += 1
   }
 
-  if (toggleAutoLockButton) {
-    const updateLabel = () => {
-      toggleAutoLockButton.textContent = autoLockEnabled ? 'Auto Lock: On' : 'Auto Lock: Off'
-    }
-    updateLabel()
-    toggleAutoLockButton.addEventListener('click', () => {
-      autoLockEnabled = !autoLockEnabled
-      updateLabel()
-      emitSettings()
-    })
-  }
-
-  if (toggleAutoFireButton) {
-    const updateLabel = () => {
-      toggleAutoFireButton.textContent = autoFireEnabled ? 'Auto Fire: On' : 'Auto Fire: Off'
-    }
-    updateLabel()
-    toggleAutoFireButton.addEventListener('click', () => {
-      autoFireEnabled = !autoFireEnabled
-      updateLabel()
-      emitSettings()
-    })
-  }
-
-  if (toggleDebugButton && debugEl) {
-    const updateLabel = () => {
-      toggleDebugButton.textContent = debugEnabled ? 'Debug: On' : 'Debug: Off'
-      debugEl.style.display = debugEnabled ? 'block' : 'none'
-      if (debugEnabled) debugEl.textContent = 'starting…'
-    }
-    updateLabel()
-    toggleDebugButton.addEventListener('click', () => {
-      debugEnabled = !debugEnabled
-      updateLabel()
-      emitSettings()
-    })
-  }
-
-  const tuningState = {
-    speedX: resolvedSettings.tuning?.speedX ?? baseSpeedX,
-    speedY: resolvedSettings.tuning?.speedY ?? baseSpeedY,
-    // UI scale 1..10. We'll map it to an internal lerp factor.
-    turnResponse: resolvedSettings.tuning?.turnResponse ?? 3.0,
-    rollStrafeMultiplier: resolvedSettings.tuning?.rollStrafeMultiplier ?? baseRollStrafeMultiplier,
-    camDistance: resolvedSettings.tuning?.camDistance ?? 10.0,
-    camHeight: resolvedSettings.tuning?.camHeight ?? 1.8,
-  }
-  let mouseIntensity = resolvedSettings.tuning?.mouseIntensity ?? 6.0
-
   emitSettings = () => {
     if (!onSettingsChange) return
     onSettingsChange({
-      mouseMode,
-      touchMode,
-      instructionsVisible,
-      invertY,
-      hitboxesEnabled,
-      shadowsEnabled,
-      levelMeshEnabled,
-      laserEnabled,
-      autoLockEnabled,
-      autoFireEnabled,
-      debugEnabled,
+      mouseMode: state.mouseMode,
+      touchMode: state.touchMode,
+      instructionsVisible: state.instructionsVisible,
+      invertY: state.invertY,
+      hitboxesEnabled: state.hitboxesEnabled,
+      shadowsEnabled: state.shadowsEnabled,
+      levelMeshEnabled: state.levelMeshEnabled,
+      laserEnabled: state.laserEnabled,
+      autoLockEnabled: state.autoLockEnabled,
+      autoFireEnabled: state.autoFireEnabled,
+      debugEnabled: state.debugEnabled,
       tuning: {
         speedX: tuningState.speedX,
         speedY: tuningState.speedY,
         turnResponse: tuningState.turnResponse,
         rollStrafeMultiplier: tuningState.rollStrafeMultiplier,
-        mouseIntensity,
+        mouseIntensity: mouseIntensityRef.value,
         camDistance: tuningState.camDistance,
         camHeight: tuningState.camHeight,
       },
     })
   }
 
-  if (tuning?.speedX) {
-    const sync = () => {
-      tuningState.speedX = Number(tuning.speedX.value)
-      if (tuning.speedXVal) tuning.speedXVal.textContent = tuningState.speedX.toFixed(1)
-      emitSettings()
-    }
-    tuning.speedX.value = tuningState.speedX
-    tuning.speedX.addEventListener('input', sync)
-    sync()
-  }
-  if (tuning?.speedY) {
-    const sync = () => {
-      tuningState.speedY = Number(tuning.speedY.value)
-      if (tuning.speedYVal) tuning.speedYVal.textContent = tuningState.speedY.toFixed(1)
-      emitSettings()
-    }
-    tuning.speedY.value = tuningState.speedY
-    tuning.speedY.addEventListener('input', sync)
-    sync()
-  }
-  if (tuning?.turnResponse) {
-    const sync = () => {
-      tuningState.turnResponse = Number(tuning.turnResponse.value)
-      if (tuning.turnResponseVal) tuning.turnResponseVal.textContent = tuningState.turnResponse.toFixed(1)
-      emitSettings()
-    }
-    tuning.turnResponse.value = tuningState.turnResponse
-    tuning.turnResponse.addEventListener('input', sync)
-    sync()
-  }
-  if (tuning?.rollStrafe) {
-    const sync = () => {
-      tuningState.rollStrafeMultiplier = Number(tuning.rollStrafe.value)
-      if (tuning.rollStrafeVal) tuning.rollStrafeVal.textContent = tuningState.rollStrafeMultiplier.toFixed(1)
-      emitSettings()
-    }
-    tuning.rollStrafe.value = tuningState.rollStrafeMultiplier
-    tuning.rollStrafe.addEventListener('input', sync)
-    sync()
-  }
-  if (tuning?.mouseIntensity) {
-    const sync = () => {
-      const value = Number(tuning.mouseIntensity.value)
-      mouseIntensity = value
-      if (tuning.mouseIntensityVal) tuning.mouseIntensityVal.textContent = value.toFixed(1)
-      // Map 1..10 -> 0.5..3.0 (10 is very tight)
-      const sensitivity = 0.5 + (value / 10) * 2.5
-      input.setMouseSensitivity(sensitivity)
-      emitSettings()
-    }
-    tuning.mouseIntensity.value = mouseIntensity
-    tuning.mouseIntensity.addEventListener('input', sync)
-    sync()
-  }
-  if (tuning?.camDistance) {
-    const sync = () => {
-      const value = Number(tuning.camDistance.value)
-      tuningState.camDistance = value
-      if (tuning.camDistanceVal) tuning.camDistanceVal.textContent = value.toFixed(1)
-      emitSettings()
-    }
-    tuning.camDistance.value = tuningState.camDistance
-    tuning.camDistance.addEventListener('input', sync)
-    sync()
-  }
-  if (tuning?.camHeight) {
-    const sync = () => {
-      const value = Number(tuning.camHeight.value)
-      tuningState.camHeight = value
-      if (tuning.camHeightVal) tuning.camHeightVal.textContent = value.toFixed(1)
-      emitSettings()
-    }
-    tuning.camHeight.value = tuningState.camHeight
-    tuning.camHeight.addEventListener('input', sync)
-    sync()
-  }
+  bindSettingsUI({
+    elements: {
+      menuButton,
+      toggleMouseButton,
+      toggleTouchButton,
+      toggleInstructionsButton,
+      toggleInvertYButton,
+      toggleHitboxesButton,
+      toggleShadowsButton,
+      toggleLevelMeshButton,
+      toggleLaserButton,
+      toggleAutoLockButton,
+      toggleAutoFireButton,
+      toggleDebugButton,
+      settingsPanel,
+      instructionsEl,
+      touchControls,
+      tuning,
+    },
+    state,
+    tuningState,
+    mouseIntensityRef,
+    input,
+    emitSettings,
+    onHitboxesChange: (enabled) => {
+      shipHitboxGroup.visible = enabled
+      refreshTargetHitboxes()
+    },
+    onShadowsChange: (enabled) => {
+      playerShadow.visible = enabled
+      refreshTargetShadows()
+    },
+    onLevelMeshChange: (enabled) => {
+      setLevelMeshVisible(enabled)
+    },
+    onLaserChange: (enabled) => {
+      laserLine.visible = enabled
+      if (!enabled) {
+        laserHit.visible = false
+        clearLaserHighlight()
+      }
+    },
+    debugEl,
+  })
 
   let frame = 0
   let last = performance.now()
@@ -702,15 +443,15 @@ export function initGame({
       frame += 1
 
       input.update()
-      const state = input.getState()
-      const { steer, aim, usingMouseAim } = state
+      const inputState = input.getState()
+      const { steer, aim, usingMouseAim } = inputState
 
       // Movement
       // X: keep current "feels correct" mapping.
       const xInput = -steer.x
       // Y: default is screen/direct (up = nose up). Invert toggles flight-style.
-      const yInput = invertY ? steer.y : -steer.y
-      const speedScale = state.boost.held ? boostMultiplier : state.brake.held ? brakeMultiplier : 1
+      const yInput = state.invertY ? steer.y : -steer.y
+      const speedScale = inputState.boost.held ? GAME_CONFIG.boostMultiplier : inputState.brake.held ? GAME_CONFIG.brakeMultiplier : 1
       const rollStrafe =
         barrelRollTimer > 0 && barrelRollDir !== 0
           ? tuningState.rollStrafeMultiplier * -barrelRollDir
@@ -718,7 +459,7 @@ export function initGame({
       shipVelocity.set(
         xInput * tuningState.speedX + rollStrafe * tuningState.speedX,
         yInput * tuningState.speedY,
-        forwardSpeed * speedScale
+        GAME_CONFIG.forwardSpeed * speedScale
       )
       player.group.position.x += shipVelocity.x * dt
       player.group.position.y += shipVelocity.y * dt
@@ -740,8 +481,8 @@ export function initGame({
         playerZ: player.group.position.z,
         dt,
         targetSpawnTimer,
-        hitboxesEnabled,
-        shadowsEnabled,
+        hitboxesEnabled: state.hitboxesEnabled,
+        shadowsEnabled: state.shadowsEnabled,
         shadowMaterial,
         floorY: envState.floorY,
         onSpawn: (target) => {
@@ -776,18 +517,18 @@ export function initGame({
 
       // Barrel roll (Shift + Left/Right).
       barrelRollCooldown = Math.max(0, barrelRollCooldown - dt)
-      if (barrelRollTimer <= 0 && barrelRollCooldown <= 0 && state.roll.held) {
+      if (barrelRollTimer <= 0 && barrelRollCooldown <= 0 && inputState.roll.held) {
         const rollThreshold = usingMouseAim ? 0.1 : 0.6
-        if (state.steer.x <= -rollThreshold) {
-          barrelRollTimer = barrelRollDuration
+        if (inputState.steer.x <= -rollThreshold) {
+          barrelRollTimer = GAME_CONFIG.barrelRollDuration
           barrelRollDir = -1
           barrelRollStartZ = player.group.rotation.z
-          barrelRollCooldown = barrelRollCooldownTime
-        } else if (state.steer.x >= rollThreshold) {
-          barrelRollTimer = barrelRollDuration
+          barrelRollCooldown = GAME_CONFIG.barrelRollCooldownTime
+        } else if (inputState.steer.x >= rollThreshold) {
+          barrelRollTimer = GAME_CONFIG.barrelRollDuration
           barrelRollDir = 1
           barrelRollStartZ = player.group.rotation.z
-          barrelRollCooldown = barrelRollCooldownTime
+          barrelRollCooldown = GAME_CONFIG.barrelRollCooldownTime
         }
       }
       // Loop (Shift + Up). Uses motion angle to add a spiral bias.
@@ -797,10 +538,10 @@ export function initGame({
         loopTimer <= 0 &&
         loopCooldown <= 0 &&
         barrelRollTimer <= 0 &&
-        state.roll.held &&
+        inputState.roll.held &&
         yInput >= loopThreshold
       ) {
-        loopTimer = loopDuration
+        loopTimer = GAME_CONFIG.loopDuration
         loopDir = -1
         loopStartPos.copy(player.group.position)
         loopBlendStartPos.copy(player.group.position)
@@ -808,9 +549,9 @@ export function initGame({
         loopRight.crossVectors(loopForward, loopWorldUp).normalize()
         loopPitchPrev = player.group.rotation.x
         loopStartPitch = player.group.rotation.x
-        loopBlendInTimer = loopBlendInDuration
+        loopBlendInTimer = GAME_CONFIG.loopBlendInDuration
         loopBlendOutTimer = 0
-        loopCooldown = loopCooldownTime
+        loopCooldown = GAME_CONFIG.loopCooldownTime
       }
       if (barrelRollTimer > 0) {
         barrelRollTimer = Math.max(0, barrelRollTimer - dt)
@@ -831,14 +572,14 @@ export function initGame({
         loopBlendOutTimer = Math.max(0, loopBlendOutTimer - dt)
       }
       loopWasActive = wasLooping
-      const rollPhase = barrelRollTimer > 0 ? 1 - barrelRollTimer / barrelRollDuration : 0
+      const rollPhase = barrelRollTimer > 0 ? 1 - barrelRollTimer / GAME_CONFIG.barrelRollDuration : 0
       const easedPhase = rollPhase * rollPhase * (3 - 2 * rollPhase)
       // Full roll = 360° rotation.
       const barrelRollOffset = barrelRollTimer > 0 ? barrelRollDir * easedPhase * Math.PI * 2 : 0
-      const loopPhase = loopTimer > 0 ? 1 - loopTimer / loopDuration : 0
+      const loopPhase = loopTimer > 0 ? 1 - loopTimer / GAME_CONFIG.loopDuration : 0
       const loopPhaseEased = loopPhase * loopPhase * (3 - 2 * loopPhase)
       const loopTheta = loopPhase * Math.PI * 2
-      const loopBlendIn = loopBlendInDuration > 0 ? 1 - loopBlendInTimer / loopBlendInDuration : 1
+      const loopBlendIn = GAME_CONFIG.loopBlendInDuration > 0 ? 1 - loopBlendInTimer / GAME_CONFIG.loopBlendInDuration : 1
       const loopBlendT = Math.min(1, Math.max(0, loopBlendIn))
       const loopBlendScale = loopBlendT * loopBlendT * (3 - 2 * loopBlendT)
       player.group.rotation.y = THREE.MathUtils.lerp(player.group.rotation.y, targetYaw, rotLerp)
@@ -846,10 +587,10 @@ export function initGame({
         const dTheta = 0.02
         const theta2 = Math.min(loopTheta + dTheta, Math.PI * 2)
         const phase2 = theta2 / (Math.PI * 2)
-        const verticalOffset = loopRadius * (1 - Math.cos(loopTheta))
-        const forwardOffset = loopRadius * Math.sin(loopTheta) * -loopDir + loopForwardCarry * loopPhase
-        const verticalOffset2 = loopRadius * (1 - Math.cos(theta2))
-        const forwardOffset2 = loopRadius * Math.sin(theta2) * -loopDir + loopForwardCarry * phase2
+        const verticalOffset = GAME_CONFIG.loopRadius * (1 - Math.cos(loopTheta))
+        const forwardOffset = GAME_CONFIG.loopRadius * Math.sin(loopTheta) * -loopDir + loopForwardCarry * loopPhase
+        const verticalOffset2 = GAME_CONFIG.loopRadius * (1 - Math.cos(theta2))
+        const forwardOffset2 = GAME_CONFIG.loopRadius * Math.sin(theta2) * -loopDir + loopForwardCarry * phase2
         tmpLoopOffset
           .copy(loopStartPos)
           .addScaledVector(loopForward, forwardOffset)
@@ -875,7 +616,7 @@ export function initGame({
         loopPitchPrev = adjusted
         player.group.rotation.x = THREE.MathUtils.lerp(loopStartPitch, adjusted, loopBlendScale)
       } else if (loopBlendOutTimer > 0) {
-        const t = 1 - loopBlendOutTimer / loopBlendOutDuration
+        const t = 1 - loopBlendOutTimer / GAME_CONFIG.loopBlendOutDuration
         const blend = t * t * (3 - 2 * t)
         let adjustedTarget = targetPitch
         while (adjustedTarget - loopEndPitch > Math.PI) adjustedTarget -= Math.PI * 2
@@ -898,7 +639,7 @@ export function initGame({
         const nearest = wrapped > Math.PI ? wrapped - Math.PI * 2 : wrapped
         player.group.rotation.z = THREE.MathUtils.lerp(nearest, targetRoll + spiralRoll, rotLerp)
       } else if (loopBlendOutTimer > 0) {
-        const t = 1 - loopBlendOutTimer / loopBlendOutDuration
+        const t = 1 - loopBlendOutTimer / GAME_CONFIG.loopBlendOutDuration
         const blend = t * t * (3 - 2 * t)
         let adjustedTarget = targetRoll
         while (adjustedTarget - loopEndRoll > Math.PI) adjustedTarget -= Math.PI * 2
@@ -912,13 +653,13 @@ export function initGame({
 
       if (loopTimer > 0) {
         const spiralBias = Math.sin(loopTheta * 2) * xInput
-        const verticalOffset = loopRadius * (1 - Math.cos(loopTheta))
-        const forwardOffset = loopRadius * Math.sin(loopTheta) * -loopDir + loopForwardCarry * loopPhase
+        const verticalOffset = GAME_CONFIG.loopRadius * (1 - Math.cos(loopTheta))
+        const forwardOffset = GAME_CONFIG.loopRadius * Math.sin(loopTheta) * -loopDir + loopForwardCarry * loopPhase
         tmpLoopTarget
           .copy(loopStartPos)
           .addScaledVector(loopForward, forwardOffset)
           .addScaledVector(loopWorldUp, verticalOffset)
-          .addScaledVector(loopRight, spiralBias * loopRadius * 0.35)
+          .addScaledVector(loopRight, spiralBias * GAME_CONFIG.loopRadius * 0.35)
         if (loopBlendScale < 1) {
           tmpLoopOffset.copy(loopBlendStartPos).lerp(tmpLoopTarget, loopBlendScale)
           player.group.position.copy(tmpLoopOffset)
@@ -935,7 +676,7 @@ export function initGame({
       } else if (!reticleTarget) {
         autoFirePendingTarget = null
       }
-      if (laserEnabled) {
+      if (state.laserEnabled) {
         // Laser sight: ray from nose to closest target (or max distance).
         tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
         tmpLaserOrigin.copy(player.group.position).addScaledVector(tmpForward, 1.3)
@@ -958,7 +699,7 @@ export function initGame({
             applyLaserHighlight(laserTarget)
           }
         } else {
-          tmpLaserEnd.copy(tmpLaserOrigin).addScaledVector(tmpForward, laserMaxDistance)
+          tmpLaserEnd.copy(tmpLaserOrigin).addScaledVector(tmpForward, GAME_CONFIG.laserMaxDistance)
           laserHit.visible = false
           clearLaserHighlight()
         }
@@ -982,7 +723,7 @@ export function initGame({
         }
       }
 
-      if (shadowsEnabled) {
+      if (state.shadowsEnabled) {
         playerShadow.position.set(player.group.position.x, envState.floorY + 0.02, player.group.position.z)
         for (let i = 0; i < targets.length; i += 1) {
           const t = targets[i]
@@ -994,26 +735,26 @@ export function initGame({
 
       // Fire (space) / Auto-lock (R by default)
       fireCooldown = Math.max(0, fireCooldown - dt)
-      const wantsFire = state.fire.pressed || state.fire.held
-      const wantsAutoFire = autoFireEnabled && autoFirePendingTarget
-      const wantsAutoLock = state.laser.held
-      if (autoLockEnabled && wantsAutoLock && fireCooldown <= 0) {
+      const wantsFire = inputState.fire.pressed || inputState.fire.held
+      const wantsAutoFire = state.autoFireEnabled && autoFirePendingTarget
+      const wantsAutoLock = inputState.laser.held
+      if (state.autoLockEnabled && wantsAutoLock && fireCooldown <= 0) {
         const target = currentAutoLockTarget
         if (target) {
           resolveAutoLockHit(target)
           currentAutoLockTarget = null
-          fireCooldown = projectileCooldown
+          fireCooldown = GAME_CONFIG.projectileCooldown
         }
       } else if (wantsAutoFire && fireCooldown <= 0) {
         fireAimedProjectile(autoFirePendingTarget)
         autoFirePendingTarget = null
-        fireCooldown = projectileCooldown
+        fireCooldown = GAME_CONFIG.projectileCooldown
       } else {
         fireCooldown = tryFireProjectile({
-          state,
+          state: inputState,
           fireCooldown,
-          projectileCooldown,
-          projectileSpeed,
+          projectileCooldown: GAME_CONFIG.projectileCooldown,
+          projectileSpeed: GAME_CONFIG.projectileSpeed,
           player,
           projectiles,
           scene,
@@ -1030,7 +771,7 @@ export function initGame({
         scene,
         dt,
         playerZ: player.group.position.z,
-        projectileSpeed,
+        projectileSpeed: GAME_CONFIG.projectileSpeed,
         onMiss: (projectile) => {
           const shotId = projectile?.shotId
           if (typeof shotId !== 'number') {
@@ -1073,7 +814,7 @@ export function initGame({
         tmpSphereCenter,
         tmpToTarget,
         playerHitTimer,
-        playerHitInvuln,
+        playerHitInvuln: GAME_CONFIG.playerHitInvuln,
         effects,
       })
       playerHitTimer = shipHit.playerHitTimer
@@ -1096,7 +837,7 @@ export function initGame({
       )
       camera.lookAt(horizon)
 
-      if (debugEl && debugEnabled) {
+      if (debugEl && state.debugEnabled) {
         const cp = new THREE.Vector3()
         camera.getWorldPosition(cp)
         const rect = renderer.domElement.getBoundingClientRect()
@@ -1120,7 +861,7 @@ export function initGame({
       renderer.render(scene, camera)
       requestAnimationFrame(loop)
     } catch (err) {
-      if (debugEl && debugEnabled) {
+      if (debugEl && state.debugEnabled) {
         debugEl.textContent = `loop error: ${err?.message ?? String(err)}`
       }
     }
