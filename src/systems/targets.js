@@ -16,6 +16,46 @@ export function attachTargetHitbox(target) {
   target.hitbox = hb
 }
 
+export function attachAutoLockIndicator(target) {
+  if (target.autoLockIndicator) return
+  const group = new THREE.Group()
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.46, 0.5, 18),
+    new THREE.MeshBasicMaterial({
+      color: 0xff3344,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
+    })
+  )
+  const crossGeo = new THREE.BufferGeometry()
+  crossGeo.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute([-0.6, 0, 0, 0.6, 0, 0, 0, -0.6, 0, 0, 0.6, 0], 3)
+  )
+  const cross = new THREE.LineSegments(
+    crossGeo,
+    new THREE.LineBasicMaterial({
+      color: 0xff3344,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+      depthWrite: false,
+    })
+  )
+  group.add(ring)
+  group.add(cross)
+  group.position.z = 0
+  group.visible = false
+  group.renderOrder = 999
+  ring.renderOrder = 999
+  cross.renderOrder = 999
+  target.mesh.add(group)
+  target.autoLockIndicator = group
+}
+
 export function updateTargets({
   targets,
   scene,
@@ -28,6 +68,7 @@ export function updateTargets({
   shadowsEnabled,
   shadowMaterial,
   floorY,
+  onSpawn,
 }) {
   let timer = targetSpawnTimer - dt
   if (timer <= 0) {
@@ -49,6 +90,7 @@ export function updateTargets({
     }
     scene.add(t.mesh)
     targets.push(t)
+    if (onSpawn) onSpawn(t)
     timer = THREE.MathUtils.randFloat(0.45, 0.85)
   }
 

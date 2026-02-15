@@ -1,9 +1,11 @@
 import * as THREE from 'three'
 
 const EFFECT_DURATION = 0.18
+const LASER_DURATION = 0.12
 
 export function createEffectsSystem(scene) {
   const explosions = []
+  const lasers = []
 
   function addExplosion(position, { color, radius }) {
     const mesh = new THREE.Mesh(
@@ -14,6 +16,21 @@ export function createEffectsSystem(scene) {
     mesh.userData.t = 0
     scene.add(mesh)
     explosions.push(mesh)
+  }
+
+  function addLaserBeam(start, end, { color = 0xff3344, opacity = 0.9 } = {}) {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3))
+    geometry.attributes.position.setXYZ(0, start.x, start.y, start.z)
+    geometry.attributes.position.setXYZ(1, end.x, end.y, end.z)
+    geometry.attributes.position.needsUpdate = true
+
+    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity })
+    const beam = new THREE.Line(geometry, material)
+    beam.frustumCulled = false
+    beam.userData.t = 0
+    scene.add(beam)
+    lasers.push(beam)
   }
 
   function update(dt) {
@@ -28,7 +45,20 @@ export function createEffectsSystem(scene) {
         explosions.splice(i, 1)
       }
     }
+
+    for (let i = lasers.length - 1; i >= 0; i -= 1) {
+      const beam = lasers[i]
+      beam.userData.t += dt
+      const k = beam.userData.t / LASER_DURATION
+      beam.material.opacity = THREE.MathUtils.clamp(1 - k, 0, 1)
+      if (beam.userData.t >= LASER_DURATION) {
+        scene.remove(beam)
+        beam.geometry.dispose()
+        beam.material.dispose()
+        lasers.splice(i, 1)
+      }
+    }
   }
 
-  return { addExplosion, update }
+  return { addExplosion, addLaserBeam, update }
 }

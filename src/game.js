@@ -3,7 +3,7 @@ import { InputManager } from './input.js'
 import { createPlayer } from './entities.js'
 import { createEnvironment, updateEnvironment } from './systems/environment.js'
 import { createReticleSystem } from './systems/reticle.js'
-import { attachTargetHitbox, updateTargets } from './systems/targets.js'
+import { attachAutoLockIndicator, attachTargetHitbox, updateTargets } from './systems/targets.js'
 import { tryFireProjectile, updateProjectiles } from './systems/projectiles.js'
 import { createEffectsSystem } from './systems/effects.js'
 import { handleProjectileTargetCollisions, handleTargetShipCollisions } from './systems/collisions.js'
@@ -20,6 +20,7 @@ export function initGame({
   toggleShadowsButton,
   toggleLevelMeshButton,
   toggleLaserButton,
+  toggleAutoLockButton,
   toggleDebugButton,
   touchControls,
   touchStick,
@@ -189,7 +190,7 @@ export function initGame({
   const boostMultiplier = 4.0
   const brakeMultiplier = 0.1
   const projectileSpeed = 35
-  const projectileCooldown = 0.5
+  const projectileCooldown = 0.18
   let fireCooldown = 0
   let nextShotId = 1
   let nextExpectedHitId = 1
@@ -250,6 +251,9 @@ export function initGame({
   let hitboxesEnabled = false
   let shadowsEnabled = true
   let laserEnabled = true
+  let autoLockEnabled = true
+  const autoLockAcquireDistance = 75
+  let currentAutoLockTarget = null
   const shadowMaterial = new THREE.MeshBasicMaterial({
     color: 0x000000,
     transparent: true,
@@ -435,6 +439,89 @@ export function initGame({
     })
   }
 
+  const ensureAutoLockState = (target) => {
+    if (target.autoLock) return
+    target.autoLock = {
+      tracked: true,
+      eligible: false,
+      targeted: false,
+    }
+    attachAutoLockIndicator(target)
+  }
+
+  const updateAutoLockEligibility = (playerZ) => {
+    if (!autoLockEnabled) return
+    for (let i = 0; i < targets.length; i += 1) {
+      const t = targets[i]
+      ensureAutoLockState(t)
+      if (!t.autoLock.eligible && t.mesh.position.z - playerZ <= autoLockAcquireDistance) {
+        t.autoLock.eligible = true
+      }
+    }
+  }
+
+  const updateAutoLockTargeting = (playerZ) => {
+    if (!autoLockEnabled) {
+      currentAutoLockTarget = null
+      for (let i = 0; i < targets.length; i += 1) {
+        const t = targets[i]
+        if (t.autoLock) t.autoLock.targeted = false
+        if (t.autoLockIndicator) t.autoLockIndicator.visible = false
+      }
+      return
+    }
+    let best = null
+    let bestDz = Infinity
+    for (let i = 0; i < targets.length; i += 1) {
+      const t = targets[i]
+      const lock = t.autoLock
+      if (!lock || !lock.eligible) continue
+      lock.targeted = false
+      const dz = t.mesh.position.z - playerZ
+      if (dz < bestDz) {
+        bestDz = dz
+        best = t
+      }
+    }
+    if (best?.autoLock) best.autoLock.targeted = true
+    currentAutoLockTarget = best ?? null
+    for (let i = 0; i < targets.length; i += 1) {
+      const t = targets[i]
+      if (t.autoLockIndicator) {
+        t.autoLockIndicator.visible = Boolean(t.autoLock?.eligible && t.autoLock?.targeted)
+      }
+    }
+  }
+
+  const resolveAutoLockHit = (target) => {
+    tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
+    tmpLaserOrigin.copy(player.group.position).addScaledVector(tmpForward, 1.3)
+    effects.addLaserBeam(tmpLaserOrigin, target.mesh.position, { color: 0xff3344, opacity: 0.9 })
+    const shotId = nextShotId
+    nextShotId += 1
+    if (shotId !== nextExpectedHitId) {
+      scoreSystem.resetCombo()
+    }
+    scoreSystem.addHit(10)
+    nextExpectedHitId = Math.max(nextExpectedHitId, shotId + 1)
+    scene.remove(target.mesh)
+    if (target.shadow) scene.remove(target.shadow)
+    const idx = targets.indexOf(target)
+    if (idx >= 0) targets.splice(idx, 1)
+    effects.addExplosion(target.mesh.position, { color: 0xfff1a6, radius: 0.6 })
+  }
+
+  if (toggleAutoLockButton) {
+    const updateLabel = () => {
+      toggleAutoLockButton.textContent = autoLockEnabled ? 'Auto Lock: On' : 'Auto Lock: Off'
+    }
+    updateLabel()
+    toggleAutoLockButton.addEventListener('click', () => {
+      autoLockEnabled = !autoLockEnabled
+      updateLabel()
+    })
+  }
+
   if (toggleDebugButton && debugEl) {
     const updateLabel = () => {
       toggleDebugButton.textContent = debugEnabled ? 'Debug: On' : 'Debug: Off'
@@ -571,7 +658,12 @@ export function initGame({
         shadowsEnabled,
         shadowMaterial,
         floorY: envState.floorY,
+        onSpawn: (target) => {
+          ensureAutoLockState(target)
+        },
       })
+      updateAutoLockEligibility(player.group.position.z)
+      updateAutoLockTargeting(player.group.position.z)
 
       // Player flicker on hit (visual feedback only).
       playerHitTimer = Math.max(0, playerHitTimer - dt)
@@ -808,21 +900,32 @@ export function initGame({
         }
       }
 
-      // Fire (space)
+      // Fire (space) / Auto-lock (R by default)
       fireCooldown = Math.max(0, fireCooldown - dt)
-      fireCooldown = tryFireProjectile({
-        state,
-        fireCooldown,
-        projectileCooldown,
-        projectileSpeed,
-        player,
-        projectiles,
-        scene,
-        onFire: (proj) => {
-          proj.shotId = nextShotId
-          nextShotId += 1
-        },
-      })
+      const wantsFire = state.fire.pressed || state.fire.held
+      const wantsAutoLock = state.laser.held
+      if (autoLockEnabled && wantsAutoLock && fireCooldown <= 0) {
+        const target = currentAutoLockTarget
+        if (target) {
+          resolveAutoLockHit(target)
+          currentAutoLockTarget = null
+          fireCooldown = projectileCooldown
+        }
+      } else {
+        fireCooldown = tryFireProjectile({
+          state,
+          fireCooldown,
+          projectileCooldown,
+          projectileSpeed,
+          player,
+          projectiles,
+          scene,
+          onFire: (proj) => {
+            proj.shotId = nextShotId
+            nextShotId += 1
+          },
+        })
+      }
 
       // Update projectiles (forward +Z)
       updateProjectiles({

@@ -12,7 +12,7 @@ const KEY_BINDINGS = {
   ShiftRight: 'roll',
   KeyQ: 'brake',
   KeyE: 'boost',
-  KeyR: 'missiles',
+  KeyR: 'laser',
   KeyJ: 'fire',
 }
 
@@ -169,7 +169,7 @@ export class InputManager {
       brake: { held: false, pressed: false, released: false },
       roll: { held: false, pressed: false, released: false },
       dodge: { held: false, pressed: false, released: false },
-      missiles: { held: false, pressed: false, released: false },
+      laser: { held: false, pressed: false, released: false },
     }
   }
 
@@ -315,14 +315,14 @@ export class InputManager {
     const brakeHeld = this.keys.has('brake') || (pad && pad.buttons[4]?.pressed)
     const rollHeld = this.keys.has('roll') || (pad && pad.buttons[1]?.pressed) || this.touchRollHeld
     const dodgeHeld = this.keys.has('dodge') || (pad && pad.buttons[0]?.pressed)
-    const missilesHeld = this.keys.has('missiles') || (pad && pad.buttons[5]?.pressed)
+    const laserHeld = this.keys.has('laser') || (pad && pad.buttons[5]?.pressed)
 
     this._applyButton(state, 'fire', fireHeld)
     this._applyButton(state, 'boost', boostHeld)
     this._applyButton(state, 'brake', brakeHeld)
     this._applyButton(state, 'roll', rollHeld)
     this._applyButton(state, 'dodge', dodgeHeld)
-    this._applyButton(state, 'missiles', missilesHeld)
+    this._applyButton(state, 'laser', laserHeld)
 
     this.prevState = this.state
     this.state = state
