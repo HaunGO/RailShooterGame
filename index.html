@@ -4,10 +4,31 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>Rail Shooter MVP</title>
   </head>
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
+    <script>
+      (function () {
+        var script = document.querySelector('script[type="module"]');
+        if (!script) return;
+        var currentPath = (script.src && new URL(script.src).pathname) || '';
+        function check() {
+          fetch(window.location.pathname + '?t=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+              var m = html.match(/src="(\/assets\/[^"]+\.js)"/) || html.match(/src="(\/src\/main\.js)"/);
+              var newPath = m ? m[1] : '';
+              if (newPath && newPath !== currentPath) location.reload();
+            })
+            .catch(function () {});
+        }
+        setInterval(check, 12000);
+      })();
+    </script>
   </body>
 </html>

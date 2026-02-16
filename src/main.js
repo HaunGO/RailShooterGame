@@ -100,11 +100,14 @@ app.innerHTML = `
       <div><strong>Boost/Brake:</strong> E / Q</div>
       <div><strong>Roll:</strong> Shift</div>
       <div><strong>Barrel roll:</strong> Shift + Left/Right</div>
-      <div><strong>Touch:</strong> Stick + Fire button</div>
+      <div><strong>Touch:</strong> Stick + Fast/Slow + Fire + Instant Laser + Roll</div>
     </div>
     <div id="touch-controls" data-mode="off">
+      <button id="touch-fast" class="touch-fast" type="button">Fast</button>
       <div id="touch-stick" class="touch-zone" aria-label="Touch stick"></div>
+      <button id="touch-slow" class="touch-slow" type="button">Slow</button>
       <button id="touch-fire" class="touch-zone" type="button">Fire</button>
+      <button id="touch-laser" class="touch-laser" type="button">Instant Laser</button>
       <button id="touch-roll" class="touch-roll" type="button">Roll</button>
     </div>
   </div>
@@ -148,7 +151,10 @@ initGame({
   onSettingsChange: saveSettings,
   touchControls: document.querySelector('#touch-controls'),
   touchStick: document.querySelector('#touch-stick'),
+  touchFast: document.querySelector('#touch-fast'),
+  touchSlow: document.querySelector('#touch-slow'),
   touchFire: document.querySelector('#touch-fire'),
+  touchLaser: document.querySelector('#touch-laser'),
   touchRoll: document.querySelector('#touch-roll'),
   tuning: {
     speedX: document.querySelector('#speed-x'),

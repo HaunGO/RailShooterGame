@@ -40,7 +40,10 @@ export function initGame({
   onSettingsChange,
   touchControls,
   touchStick,
+  touchFast,
+  touchSlow,
   touchFire,
+  touchLaser,
   touchRoll,
   tuning,
   score,
@@ -92,7 +95,10 @@ export function initGame({
   const input = new InputManager({
     canvas: renderer.domElement,
     touchStick,
+    touchFast,
+    touchSlow,
     touchFire,
+    touchLaser,
     touchRoll,
   })
   const tuningState = {

@@ -1,6 +1,6 @@
 ---
 name: Game.js componentization refactor
-overview: "Refactor the ~1140-line game.js into a clear, industry-standard componentized structure: extract core (renderer/scene/camera), config constants, flight system, laser sight, level mesh, shadows, auto-lock, and UI settings bindings so game.js becomes a thin orchestration layer. Preserve all behavior and add minimal, non-obvious comments."
+overview: "Refactor the ~1140-line game.js into a clear, industry-standard componentized structure: extract core (renderer/scene/camera), config constants, flight system, laser sight, level mesh, shadows, instant laser (R), and UI settings bindings so game.js becomes a thin orchestration layer. Preserve all behavior and add minimal, non-obvious comments."
 todos: []
 isProject: false
 ---
@@ -9,7 +9,7 @@ isProject: false
 
 ## Current state
 
-- **[game.js](src/game.js)** (~1140 lines): Single `initGame()` that does everything—Three.js bootstrap, ~400 lines of settings/UI wiring, constants, flight math (movement, barrel roll, loop), laser sight, level mesh, shadows, auto-lock/auto-fire, and the game loop. Existing systems (environment, reticle, targets, projectiles, effects, collisions, score) are already extracted in [src/systems/](src/systems/).
+- **[game.js](src/game.js)** (~1140 lines): Single `initGame()` that does everything—Three.js bootstrap, ~400 lines of settings/UI wiring, constants, flight math (movement, barrel roll, loop), laser sight, level mesh, shadows, instant laser/auto-fire, and the game loop. Existing systems (environment, reticle, targets, projectiles, effects, collisions, score) are already extracted in [src/systems/](src/systems/).
 - **main.js**: Entry point, DOM, settings load/save, calls `initGame()` with a large options object.
 - **entities.js**, **input.js**: Clean; no change needed.
 
@@ -136,20 +136,20 @@ This keeps shadow creation and layout in one place; targets.js can stay as-is (t
 
 **Note:** Today target shadows are created in two places: in `updateTargets` (on spawn) and in `refreshTargetShadows` (when toggling shadows on). Option A: shadows system provides "ensureTargetShadow(t, scene, floorY)" and game calls it from onSpawn and from refresh. Option B: keep spawn logic in targets.js, pass `shadowMaterial` and let targets create the mesh; shadows system only updates positions and visibility. Recommend Option B for minimal change to targets.js.
 
-### 3.5 Auto-lock and auto-fire
+### 3.5 Instant Laser and auto-fire
 
 **New file: [src/systems/autoLock.js](src/systems/autoLock.js)**
 
-- **createAutoLockSystem({ targetsRef, player, scene, effects, config, scoreSystem })** where `targetsRef` is the same array game.js uses (so auto-lock can splice on hit).
+- **createAutoLockSystem({ targetsRef, player, scene, effects, config, scoreSystem })** where `targetsRef` is the same array game.js uses (so the instant-laser system can splice on hit).
 - Owns: `currentAutoLockTarget`, `autoFireLockedTarget`, `autoFirePendingTarget`, `nextShotId`, `nextExpectedHitId` (or these stay in game.js and are passed in—see below).
-- **ensureAutoLockState(target)** — idempotent attach of autoLock + indicator (can delegate to targets.attachAutoLockIndicator and a small state object on target).
+- **ensureAutoLockState(target)** — idempotent attach of instant-laser state + indicator (can delegate to targets.attachAutoLockIndicator and a small state object on target).
 - **updateEligibility(playerZ)** — set eligible flag on targets within acquire distance.
 - **updateTargeting(playerZ)** — pick closest eligible, set targeted, update indicator visibility.
 - **resolveAutoLockHit(target)** — add laser beam effect, update combo/shotId, remove target, add explosion, update score.
 - **fireAimedProjectile(target)** — create projectile aimed at target, add to scene and projectiles array, assign shotId.
-- **getCurrentAutoLockTarget()** / **getAutoFireState()** so game.js can drive "R = auto-lock fire" and "auto-fire when reticle on target."
+- **getCurrentAutoLockTarget()** / **getAutoFireState()** so game.js can drive "R = instant laser fire" and "auto-fire when reticle on target."
 
-**ShotId/combo:** Keep `nextShotId` and `nextExpectedHitId` in game.js (or in a small "session" object passed into autoLock and projectiles) so combo rules stay in one place. Auto-lock and projectile hit callbacks can still call `scoreSystem.addHit` / `scoreSystem.resetCombo`; game.js passes those callbacks when creating the auto-lock system so autoLock does not depend on score module directly if you prefer.
+**ShotId/combo:** Keep `nextShotId` and `nextExpectedHitId` in game.js (or in a small "session" object passed into autoLock and projectiles) so combo rules stay in one place. Instant laser and projectile hit callbacks can still call `scoreSystem.addHit` / `scoreSystem.resetCombo`; game.js passes those callbacks when creating the instant-laser system so autoLock does not depend on score module directly if you prefer.
 
 Recommendation: game.js keeps `nextShotId`, `nextExpectedHitId`, and the onHit/onMiss combo logic; autoLock receives callbacks `onAutoLockHit(target)` and `onFireAimed(proj)` so game.js assigns shotId and updates expected hit. That preserves current behavior and keeps combo semantics visible in game.js.
 
@@ -160,7 +160,7 @@ Recommendation: game.js keeps `nextShotId`, `nextExpectedHitId`, and the onHit/o
 - **bindSettingsUI({ elements, resolvedSettings, getTuningState, onSettingsChange, input, ... })** where `elements` is an object with all button and tuning refs (menuButton, toggleMouseButton, toggleTouchButton, etc.).
 - Single function that:
   - Sets initial labels and panel state from `resolvedSettings`.
-  - Attaches all click handlers for toggles (mouse, touch, menu, instructions, invert Y, hitboxes, shadows, level mesh, laser, auto-lock, auto-fire, debug).
+  - Attaches all click handlers for toggles (mouse, touch, menu, instructions, invert Y, hitboxes, shadows, level mesh, laser, instant laser, auto-fire, debug).
   - Attaches all tuning slider `input` listeners and syncs labels; calls `onSettingsChange` when any setting changes.
 - Returns an **emitSettings()** function that game.js can call to persist current state (or pass `onSettingsChange` and have bindings call it internally on every toggle/slider change—current behavior).
 - No game logic—only DOM and callback invocation. Game.js still owns `resolvedSettings` and `tuningState`; bindings just read/write them via callbacks if needed (e.g. `getInvertY()`, `setInvertY(bool)` and same for each toggle) or game passes a single "state" object that bindings update and then call `onSettingsChange(state)`.
@@ -173,9 +173,9 @@ Prefer: game.js holds the live state (mouseMode, touchMode, hitboxesEnabled, tun
 - **initGame(options):**
   1. Create renderer, scene, camera (or core) and lights; create environment, player; create InputManager and wire canvas/touch.
   2. Build tuning state and resolved settings from options.settings; call **bindSettingsUI(...)** with all toggles/sliders and getters/setters so one place owns UI.
-  3. Create flight, laser sight, level mesh, shadows, auto-lock (with callbacks for shotId/combo), and any remaining one-off setup (ship hitbox group, debug overlay).
-  4. **Game loop:** input.update() → flight.update() → updateEnvironment → updateTargets → autoLock.updateEligibility/updateTargeting → player hit flicker → updateReticle → laserSight.update (if enabled) → levelMesh.update, shadows.update → fire (manual + auto-fire + auto-lock) → updateProjectiles → projectile/target and target/ship collisions → effects.update → camera + debug + render. Each step is a small number of lines or a single system call.
-- **Comments:** Add a short file-level comment (e.g. "Orchestrates game loop and subsystems."). Add section comments in the loop: `// Movement & orientation`, `// World wrap & spawns`, `// Reticle & laser`, `// Fire (manual / auto-fire / auto-lock)`, `// Projectiles & collisions`, `// Camera & render`. Add one or two lines only where non-obvious (e.g. shotId ordering for combo, or dt clamped to avoid spiral on lag spikes).
+  3. Create flight, laser sight, level mesh, shadows, instant laser (with callbacks for shotId/combo), and any remaining one-off setup (ship hitbox group, debug overlay).
+  4. **Game loop:** input.update() → flight.update() → updateEnvironment → updateTargets → autoLock.updateEligibility/updateTargeting → player hit flicker → updateReticle → laserSight.update (if enabled) → levelMesh.update, shadows.update → fire (manual + auto-fire + instant laser) → updateProjectiles → projectile/target and target/ship collisions → effects.update → camera + debug + render. Each step is a small number of lines or a single system call.
+- **Comments:** Add a short file-level comment (e.g. "Orchestrates game loop and subsystems."). Add section comments in the loop: `// Movement & orientation`, `// World wrap & spawns`, `// Reticle & laser`, `// Fire (manual / auto-fire / instant laser)`, `// Projectiles & collisions`, `// Camera & render`. Add one or two lines only where non-obvious (e.g. shotId ordering for combo, or dt clamped to avoid spiral on lag spikes).
 
 Result: game.js shrinks to a few hundred lines of wiring and a clear, readable loop. No behavior change.
 
@@ -193,9 +193,9 @@ Result: game.js shrinks to a few hundred lines of wiring and a clear, readable l
 5. **systems/shadows.js** — Extract player + target shadows. Verify.
 6. **systems/laserSight.js** — Extract laser creation and update. Verify.
 7. **systems/flight.js** — Extract movement and orientation; game.js calls flight.update() each frame. Verify movement, barrel roll, loop.
-8. **systems/autoLock.js** — Extract auto-lock state, eligibility, targeting, resolveAutoLockHit, fireAimedProjectile; wire callbacks from game.js for shotId/combo. Verify auto-lock (R) and auto-fire.
+8. **systems/autoLock.js** — Extract instant laser state, eligibility, targeting, resolveAutoLockHit, fireAimedProjectile; wire callbacks from game.js for shotId/combo. Verify instant laser (R) and auto-fire.
 9. **game.js** — Remove duplicated code, keep only orchestration and loop; add section comments and minimal inline comments.
-10. **Smoke test** — Full play-through: movement, fire, auto-lock, auto-fire, barrel roll, loop, hitboxes, shadows, laser, level mesh, all toggles and sliders, resize.
+10. **Smoke test** — Full play-through: movement, fire, instant laser, auto-fire, barrel roll, loop, hitboxes, shadows, laser, level mesh, all toggles and sliders, resize.
 
 ---
 
@@ -217,7 +217,7 @@ Work in order. After each step: run the game, do the step's verification checkli
 
 ### Step 3: UI settings bindings
 
-- **Do:** Create `src/ui/settingsBindings.js`. Implement `bindSettingsUI({ ... })` that receives all button/slider refs and mutable state (or get/set callbacks) for: menu, mouse, touch, instructions, invertY, hitboxes, shadows, levelMesh, laser, autoLock, autoFire, debug, and all tuning sliders. It should set initial labels from resolved settings, attach every click and `input` listener, and call `onSettingsChange` when anything changes. In game.js, replace the large block of toggle/slider setup with a single call to `bindSettingsUI(...)`, passing the same refs and state that you currently use. Keep game.js owning the state variables; bindings only read/write them and call `onSettingsChange`.
+- **Do:** Create `src/ui/settingsBindings.js`. Implement `bindSettingsUI({ ... })` that receives all button/slider refs and mutable state (or get/set callbacks) for: menu, mouse, touch, instructions, invertY, hitboxes, shadows, levelMesh, laser, instantLaser, autoFire, debug, and all tuning sliders. It should set initial labels from resolved settings, attach every click and `input` listener, and call `onSettingsChange` when anything changes. In game.js, replace the large block of toggle/slider setup with a single call to `bindSettingsUI(...)`, passing the same refs and state that you currently use. Keep game.js owning the state variables; bindings only read/write them and call `onSettingsChange`.
 - **Verify:** Open Menu; toggle every button (Mouse, Touch, HUD Tips, Invert Y, Hitboxes, Shadows, Level Mesh, Laser, Instant Laser, Auto Fire, Debug). Move every tuning slider. Reset Settings and reload; all toggles and slider values persist (sessionStorage). Labels update correctly.
 - **Rollback:** Revert game.js to inline UI wiring; delete `ui/settingsBindings.js`.
 
@@ -245,10 +245,10 @@ Work in order. After each step: run the game, do the step's verification checkli
 - **Verify:** WASD/arrows movement, boost/brake, barrel roll (Shift+left/right), loop (Shift+up). Ship stays in bounds and above floor. Orientation matches input; no jitter or wrong rotation.
 - **Rollback:** Revert game.js and delete `systems/flight.js`.
 
-### Step 8: Auto-lock
+### Step 8: Instant Laser
 
-- **Do:** Create `src/systems/autoLock.js`. Implement `createAutoLockSystem({ targetsRef, player, scene, effects, ... })` with `ensureAutoLockState`, `updateEligibility`, `updateTargeting`, `resolveAutoLockHit`, `fireAimedProjectile`. Game.js keeps `nextShotId`, `nextExpectedHitId`, and passes callbacks so autoLock calls back for shotId assignment and combo (addHit/resetCombo). Expose `getCurrentAutoLockTarget()` and auto-fire state (e.g. reticle target → autoFirePendingTarget) so the loop can invoke auto-lock fire (R) and auto-fire when reticle on target. In game.js, remove the inline auto-lock/auto-fire logic and replace with calls to the new system.
-- **Verify:** R (auto-lock) locks and fires at closest eligible target; combo and score update. Auto Fire on + reticle on target fires aimed projectiles; combo works. Indicators and targeting behavior unchanged.
+- **Do:** Create `src/systems/autoLock.js`. Implement `createAutoLockSystem({ targetsRef, player, scene, effects, ... })` with `ensureAutoLockState`, `updateEligibility`, `updateTargeting`, `resolveAutoLockHit`, `fireAimedProjectile`. Game.js keeps `nextShotId`, `nextExpectedHitId`, and passes callbacks so autoLock calls back for shotId assignment and combo (addHit/resetCombo). Expose `getCurrentAutoLockTarget()` and auto-fire state (e.g. reticle target → autoFirePendingTarget) so the loop can invoke instant laser fire (R) and auto-fire when reticle on target. In game.js, remove the inline instant laser/auto-fire logic and replace with calls to the new system.
+- **Verify:** R (instant laser) locks and fires at closest eligible target; combo and score update. Auto Fire on + reticle on target fires aimed projectiles; combo works. Indicators and targeting behavior unchanged.
 - **Rollback:** Revert game.js and delete `systems/autoLock.js`.
 
 ### Step 9: Slim down game.js and add comments
@@ -258,7 +258,7 @@ Work in order. After each step: run the game, do the step's verification checkli
 
 ### Step 10: Smoke test
 
-- **Do:** Full manual pass: movement (WASD, boost/brake), fire (space), auto-lock (R), auto-fire (toggle + reticle), barrel roll, loop, hitboxes toggle, shadows toggle, laser toggle, level mesh toggle, all tuning sliders, Menu open/close, Reset Settings, window resize. Confirm no regressions.
+- **Do:** Full manual pass: movement (WASD, boost/brake), fire (space), instant laser (R), auto-fire (toggle + reticle), barrel roll, loop, hitboxes toggle, shadows toggle, laser toggle, level mesh toggle, all tuning sliders, Menu open/close, Reset Settings, window resize. Confirm no regressions.
 - **Done:** All 10 steps complete; game.js is componentized and behavior is preserved.
 
 ## 8. What stays in game.js (summary)

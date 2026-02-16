@@ -236,6 +236,48 @@ canvas {
   left: 18px;
 }
 
+.touch-fast {
+  position: absolute;
+  left: 18px;
+  bottom: calc(10% + 160px);
+  width: 150px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(231, 238, 249, 0.25);
+  background: rgba(6, 10, 20, 0.55);
+  color: rgba(231, 238, 249, 0.9);
+  font: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: grid;
+  place-items: center;
+}
+
+.touch-slow {
+  position: absolute;
+  left: 18px;
+  bottom: max(8px, calc(10% - 58px));
+  width: 150px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(231, 238, 249, 0.25);
+  background: rgba(6, 10, 20, 0.55);
+  color: rgba(231, 238, 249, 0.9);
+  font: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: grid;
+  place-items: center;
+}
+
 #touch-fire {
   right: 18px;
   display: grid;
@@ -247,6 +289,27 @@ canvas {
 
 #touch-controls[data-mode='drag'] #touch-stick {
   display: none;
+}
+
+.touch-laser {
+  position: absolute;
+  right: 18px;
+  bottom: calc(10% + 218px);
+  width: 150px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(231, 238, 249, 0.25);
+  background: rgba(6, 10, 20, 0.55);
+  color: rgba(231, 238, 249, 0.9);
+  font: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: grid;
+  place-items: center;
 }
 
 .touch-roll {
@@ -266,10 +329,9 @@ canvas {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  display: grid;
+  place-items: center;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  #touch-controls {
-    display: none;
-  }
-}
+/* Touch controls visibility is driven by data-mode (off | stick | drag) in JS.
+   We do not hide by media: when Touch is set to Stick/Drag, show controls even on desktop for testing. */

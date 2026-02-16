@@ -17,10 +17,13 @@ const KEY_BINDINGS = {
 }
 
 export class InputManager {
-  constructor({ canvas, touchStick, touchFire, touchRoll }) {
+  constructor({ canvas, touchStick, touchFast, touchSlow, touchFire, touchLaser, touchRoll }) {
     this.canvas = canvas
     this.touchStick = touchStick
+    this.touchFast = touchFast
+    this.touchSlow = touchSlow
     this.touchFire = touchFire
+    this.touchLaser = touchLaser
     this.touchRoll = touchRoll
     this.keys = new Set()
     this.pointerDown = false
@@ -36,6 +39,9 @@ export class InputManager {
     this.mouseEnabled = true
     this.mouseMode = 'normal'
     this.touchMode = 'off'
+    this.touchFastHeld = false
+    this.touchSlowHeld = false
+    this.touchLaserHeld = false
     this.touchRollHeld = false
     this.mouseSensitivity = 1.0
     this.directSensitivity = 10.0
@@ -154,6 +160,9 @@ export class InputManager {
     this.touchSteer.y = 0
     this.touchDragSteer.x = 0
     this.touchDragSteer.y = 0
+    this.touchFastHeld = false
+    this.touchSlowHeld = false
+    this.touchLaserHeld = false
     this.touchRollHeld = false
     this.touchFireHeld = false
     this.pointerDown = false
@@ -222,6 +231,45 @@ export class InputManager {
 
     this.touchFire.addEventListener('pointerup', endFire)
     this.touchFire.addEventListener('pointercancel', endFire)
+
+    if (this.touchFast) {
+      this.touchFast.addEventListener('pointerdown', (event) => {
+        this.touchFastHeld = true
+        this.touchFast.setPointerCapture(event.pointerId)
+      })
+      const endFast = (event) => {
+        this.touchFastHeld = false
+        this.touchFast.releasePointerCapture(event.pointerId)
+      }
+      this.touchFast.addEventListener('pointerup', endFast)
+      this.touchFast.addEventListener('pointercancel', endFast)
+    }
+
+    if (this.touchSlow) {
+      this.touchSlow.addEventListener('pointerdown', (event) => {
+        this.touchSlowHeld = true
+        this.touchSlow.setPointerCapture(event.pointerId)
+      })
+      const endSlow = (event) => {
+        this.touchSlowHeld = false
+        this.touchSlow.releasePointerCapture(event.pointerId)
+      }
+      this.touchSlow.addEventListener('pointerup', endSlow)
+      this.touchSlow.addEventListener('pointercancel', endSlow)
+    }
+
+    if (this.touchLaser) {
+      this.touchLaser.addEventListener('pointerdown', (event) => {
+        this.touchLaserHeld = true
+        this.touchLaser.setPointerCapture(event.pointerId)
+      })
+      const endLaser = (event) => {
+        this.touchLaserHeld = false
+        this.touchLaser.releasePointerCapture(event.pointerId)
+      }
+      this.touchLaser.addEventListener('pointerup', endLaser)
+      this.touchLaser.addEventListener('pointercancel', endLaser)
+    }
 
     if (this.touchRoll) {
       this.touchRoll.addEventListener('pointerdown', (event) => {
@@ -311,11 +359,20 @@ export class InputManager {
       this.touchFireHeld ||
       (pad && (pad.buttons[0]?.pressed || pad.buttons[2]?.pressed))
 
-    const boostHeld = this.keys.has('boost') || (pad && pad.buttons[3]?.pressed)
-    const brakeHeld = this.keys.has('brake') || (pad && pad.buttons[4]?.pressed)
+    const boostHeld =
+      this.keys.has('boost') ||
+      (pad && pad.buttons[3]?.pressed) ||
+      this.touchFastHeld
+    const brakeHeld =
+      this.keys.has('brake') ||
+      (pad && pad.buttons[4]?.pressed) ||
+      this.touchSlowHeld
     const rollHeld = this.keys.has('roll') || (pad && pad.buttons[1]?.pressed) || this.touchRollHeld
     const dodgeHeld = this.keys.has('dodge') || (pad && pad.buttons[0]?.pressed)
-    const laserHeld = this.keys.has('laser') || (pad && pad.buttons[5]?.pressed)
+    const laserHeld =
+      this.keys.has('laser') ||
+      (pad && pad.buttons[5]?.pressed) ||
+      this.touchLaserHeld
 
     this._applyButton(state, 'fire', fireHeld)
     this._applyButton(state, 'boost', boostHeld)
