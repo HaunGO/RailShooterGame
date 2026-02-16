@@ -18,6 +18,7 @@ export function bindSettingsUI({
   const {
     menuButton,
     toggleMouseButton,
+    toggleReticleMouseButton,
     toggleTouchButton,
     toggleInstructionsButton,
     toggleInvertYButton,
@@ -49,6 +50,19 @@ export function bindSettingsUI({
     toggleMouseButton.addEventListener('click', () => {
       state.mouseMode = state.mouseMode === 'off' ? 'normal' : 'off'
       input.setMouseMode(state.mouseMode)
+      updateLabel()
+      emitSettings()
+    })
+  }
+
+  // Reticle: Ship vs Mouse (crosshairs follow ship aim vs exact cursor)
+  if (toggleReticleMouseButton) {
+    const updateLabel = () => {
+      toggleReticleMouseButton.textContent = state.reticleFollowsMouse ? 'Reticle: Mouse' : 'Reticle: Ship'
+    }
+    updateLabel()
+    toggleReticleMouseButton.addEventListener('click', () => {
+      state.reticleFollowsMouse = !state.reticleFollowsMouse
       updateLabel()
       emitSettings()
     })

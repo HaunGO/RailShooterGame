@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { GAME_CONFIG } from '../config/constants.js'
+import { GAME_CONFIG, laserOriginOffset } from '../config/constants.js'
 import { createProjectile } from '../entities.js'
 import { attachAutoLockIndicator } from './targets.js'
 
@@ -80,8 +80,7 @@ export function createAutoLockSystem({
   }
 
   function resolveAutoLockHit(target) {
-    tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
-    tmpLaserOrigin.copy(player.group.position).addScaledVector(tmpForward, 1.3)
+    tmpLaserOrigin.copy(laserOriginOffset).applyQuaternion(player.group.quaternion).add(player.group.position)
     effects.addLaserBeam(tmpLaserOrigin, target.mesh.position, {
       color: GAME_CONFIG.laserBeamColor,
       opacity: 0.9,
@@ -97,8 +96,8 @@ export function createAutoLockSystem({
 
   function fireAimedProjectile(target) {
     const proj = createProjectile(false)
+    proj.mesh.position.copy(laserOriginOffset).applyQuaternion(player.group.quaternion).add(player.group.position)
     tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
-    proj.mesh.position.copy(player.group.position).addScaledVector(tmpForward, 2.2)
     tmpToTarget.copy(target.mesh.position).sub(proj.mesh.position).normalize()
     proj.velocity = tmpToTarget.clone().multiplyScalar(GAME_CONFIG.projectileSpeed)
     scene.add(proj.mesh)

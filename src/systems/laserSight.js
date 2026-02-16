@@ -1,9 +1,9 @@
 import * as THREE from 'three'
-import { GAME_CONFIG } from '../config/constants.js'
+import { GAME_CONFIG, laserOriginOffset } from '../config/constants.js'
 
-/** Laser sight: ray from nose to first target or max distance; line, hit marker, target highlight. */
+/** Laser sight: ray from nose to center crosshairs (reticle) or to first target within that distance; line, hit marker, target highlight. */
 export function createLaserSight(scene, options = {}) {
-  const maxDistance = options.maxDistance ?? GAME_CONFIG.laserMaxDistance
+  const maxLength = options.maxLength ?? GAME_CONFIG.reticleProjectionDistance
   const tmpForward = new THREE.Vector3()
   const tmpOrigin = new THREE.Vector3()
   const tmpEnd = new THREE.Vector3()
@@ -25,7 +25,7 @@ export function createLaserSight(scene, options = {}) {
   scene.add(laserHit)
 
   const laserRaycaster = new THREE.Raycaster()
-  laserRaycaster.far = maxDistance
+  laserRaycaster.far = maxLength
 
   let laserTarget = null
 
@@ -65,14 +65,19 @@ export function createLaserSight(scene, options = {}) {
     }
   }
 
+  function setVisible(visible) {
+    laserLine.visible = visible
+    if (!visible) laserHit.visible = false
+  }
+
   function update(player, targets) {
     tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
-    tmpOrigin.copy(player.group.position).addScaledVector(tmpForward, 1.3)
+    tmpOrigin.copy(laserOriginOffset).applyQuaternion(player.group.quaternion).add(player.group.position)
     laserRaycaster.set(tmpOrigin, tmpForward)
     const targetMeshes = targets.map((t) => t.mesh)
     const hits = targetMeshes.length > 0 ? laserRaycaster.intersectObjects(targetMeshes, false) : []
 
-    if (hits.length > 0) {
+    if (hits.length > 0 && hits[0].distance <= maxLength) {
       const hit = hits[0]
       tmpEnd.copy(hit.point)
       laserHit.position.copy(hit.point)
@@ -88,7 +93,7 @@ export function createLaserSight(scene, options = {}) {
         applyLaserHighlight(laserTarget)
       }
     } else {
-      tmpEnd.copy(tmpOrigin).addScaledVector(tmpForward, maxDistance)
+      tmpEnd.copy(tmpOrigin).addScaledVector(tmpForward, maxLength)
       laserHit.visible = false
       clearLaserHighlight()
     }
@@ -106,5 +111,5 @@ export function createLaserSight(scene, options = {}) {
     }
   }
 
-  return { update, setEnabled, clearHighlightIfTargetGone }
+  return { update, setEnabled, setVisible, clearHighlightIfTargetGone }
 }

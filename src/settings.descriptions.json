@@ -1,5 +1,6 @@
 {
   "toggle-mouse": "Enable mouse aiming relative to screen center.",
+  "toggle-reticle-mouse": "Reticle: Ship = crosshairs follow ship aim. Reticle: Mouse = crosshairs follow exact cursor (Mouse Aim must be On).",
   "toggle-touch": "Cycle touch controls: Off, Stick, Drag.",
   "toggle-instructions": "Show or hide HUD control tips.",
   "toggle-invert-y": "Invert vertical steering (flight style).",

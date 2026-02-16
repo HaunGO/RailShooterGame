@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { createProjectile } from '../entities.js'
+import { laserOriginOffset } from '../config/constants.js'
 
 const tmpForward = new THREE.Vector3()
 const tmpDirection = new THREE.Vector3()
@@ -17,8 +18,7 @@ export function tryFireProjectile({
   let cooldown = Math.max(0, fireCooldown)
   if ((state.fire.pressed || state.fire.held) && cooldown <= 0) {
     const proj = createProjectile(false)
-    proj.mesh.position.copy(player.group.position)
-    proj.mesh.position.z += 2.2
+    proj.mesh.position.copy(laserOriginOffset).applyQuaternion(player.group.quaternion).add(player.group.position)
     tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
     // Snapshot heading at fire time; bullets fly straight thereafter.
     proj.velocity = tmpForward.clone().multiplyScalar(projectileSpeed)

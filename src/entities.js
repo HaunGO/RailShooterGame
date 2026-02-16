@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { laserOriginOffset } from './config/constants.js'
 
 export function createPlayer() {
   const group = new THREE.Group()
@@ -50,6 +51,14 @@ export function createPlayer() {
   const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.55, 0.55), material)
   fin.position.set(0, 0.28, -1.25)
   group.add(fin)
+
+  // Small turret on top as laser/gun source.
+  const turret = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.14, 0.22, 8),
+    material
+  )
+  turret.position.copy(laserOriginOffset)
+  group.add(turret)
 
   return {
     group,

@@ -22,12 +22,19 @@ export const GAME_CONFIG = {
   loopBlendInDuration: 0.35,
   loopBlendOutDuration: 0,
   autoLockAcquireDistance: 75,
+  /** Distance at which the reticle (center crosshairs) is drawn; laser sight is capped to this length. */
+  reticleProjectionDistance: 25,
+  /** Reticle (crosshairs) size in pixels; circle diameter and cross scale with this. */
+  reticleSize: 24,
   laserMaxDistance: 120,
   levelWidth: 80,
 }
 
 /** loopForwardCarry = forwardSpeed * loopDuration (used for loop-the-loop path). */
 export const loopForwardCarry = GAME_CONFIG.forwardSpeed * GAME_CONFIG.loopDuration
+
+/** Laser / turret origin in ship local space (top of ship, forward of ridge). */
+export const laserOriginOffset = new THREE.Vector3(0, 0.5, 0.85)
 
 /** Ship collision volume: multiple spheres in ship-local space (paper-airplane shape). */
 export const shipHitSpheres = [

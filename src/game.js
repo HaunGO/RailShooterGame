@@ -4,7 +4,7 @@
  * projectiles & collisions → effects → camera & render.
  */
 import * as THREE from 'three'
-import { GAME_CONFIG, shipHitSpheres } from './config/constants.js'
+import { GAME_CONFIG, shipHitSpheres, laserOriginOffset } from './config/constants.js'
 import { createCore } from './core/renderer.js'
 import { InputManager } from './input.js'
 import { createPlayer } from './entities.js'
@@ -18,6 +18,7 @@ import { createReticleSystem } from './systems/reticle.js'
 import { attachTargetHitbox, updateTargets } from './systems/targets.js'
 import { tryFireProjectile, updateProjectiles } from './systems/projectiles.js'
 import { createEffectsSystem } from './systems/effects.js'
+import { createWingtipTrails } from './systems/wingtipTrails.js'
 import { handleProjectileTargetCollisions, handleTargetShipCollisions } from './systems/collisions.js'
 import { createScoreSystem } from './systems/score.js'
 import { bindSettingsUI } from './ui/settingsBindings.js'
@@ -26,6 +27,7 @@ export function initGame({
   container,
   menuButton,
   toggleMouseButton,
+  toggleReticleMouseButton,
   toggleTouchButton,
   toggleInstructionsButton,
   toggleInvertYButton,
@@ -62,6 +64,7 @@ export function initGame({
       return stored === 'auto' ? (prefersTouch ? 'stick' : 'off') : stored
     })(),
     settingsOpen: settingsPanel ? settingsPanel.dataset.open !== 'false' : true,
+    reticleFollowsMouse: resolvedSettings.reticleFollowsMouse ?? false,
     instructionsVisible: resolvedSettings.instructionsVisible ?? false,
     invertY: resolvedSettings.invertY ?? false,
     hitboxesEnabled: resolvedSettings.hitboxesEnabled ?? false,
@@ -127,6 +130,9 @@ export function initGame({
   const tmpToTarget = new THREE.Vector3()
 
   const reticleEl = document.querySelector('#reticle')
+  if (reticleEl) reticleEl.style.setProperty('--reticle-size', `${GAME_CONFIG.reticleSize}px`)
+  const hudLaserSvg = document.querySelector('#hud-laser')
+  const hudLaserLine = document.querySelector('#hud-laser-line')
   const updateReticle = createReticleSystem(renderer, camera)
   const effects = createEffectsSystem(scene)
   const scoreSystem = createScoreSystem(score ?? {})
@@ -191,11 +197,14 @@ export function initGame({
   const levelMesh = createLevelMesh(scene, envState)
   levelMesh.setVisible(state.levelMeshEnabled)
 
+  const wingtipTrails = createWingtipTrails(scene)
+
   emitSettings = () => {
     if (!onSettingsChange) return
     onSettingsChange({
       mouseMode: state.mouseMode,
       touchMode: state.touchMode,
+      reticleFollowsMouse: state.reticleFollowsMouse,
       instructionsVisible: state.instructionsVisible,
       invertY: state.invertY,
       hitboxesEnabled: state.hitboxesEnabled,
@@ -221,6 +230,7 @@ export function initGame({
     elements: {
       menuButton,
       toggleMouseButton,
+      toggleReticleMouseButton,
       toggleTouchButton,
       toggleInstructionsButton,
       toggleInvertYButton,
@@ -273,6 +283,16 @@ export function initGame({
       const { steer, aim, usingMouseAim } = inputState
       flight.update(dt, inputState, tuningState, state.invertY)
 
+      const followMouse =
+        Boolean(state.reticleFollowsMouse) && Boolean(usingMouseAim) && typeof aim?.x === 'number' && typeof aim?.y === 'number'
+
+      const speedScale = inputState.boost.held
+        ? GAME_CONFIG.boostMultiplier
+        : inputState.brake.held
+          ? GAME_CONFIG.brakeMultiplier
+          : 1
+      wingtipTrails.update(dt, player, speedScale)
+
       // World wrap (floor segments)
       updateEnvironment(envState, player.group.position.z)
 
@@ -296,17 +316,13 @@ export function initGame({
       autoLock.updateEligibility(player.group.position.z, state.instantLaserEnabled)
       autoLock.updateTargeting(player.group.position.z, state.instantLaserEnabled)
 
-      // Player flicker on hit (visual feedback only).
       playerHitTimer = Math.max(0, playerHitTimer - dt)
-      if (playerHitTimer > 0) {
-        const flicker = Math.floor(playerHitTimer * 30) % 2 === 0
-        player.group.visible = flicker
-      } else {
-        player.group.visible = true
-      }
 
       // Reticle, laser sight, level mesh, shadows
-      const reticleTarget = updateReticle(reticleEl, player, targets)
+      const reticleOptions = followMouse
+        ? { followMouse: true, mouseAim: { x: aim.x, y: aim.y } }
+        : {}
+      const reticleTarget = updateReticle(reticleEl, player, targets, reticleOptions)
       if (reticleTarget !== autoFireLockedTarget) {
         autoFireLockedTarget = reticleTarget
         autoFirePendingTarget = reticleTarget
@@ -314,7 +330,31 @@ export function initGame({
         autoFirePendingTarget = null
       }
       if (state.laserEnabled) {
-        laserSight.update(player, targets)
+        if (followMouse && hudLaserSvg && hudLaserLine) {
+          laserSight.setVisible(false)
+          const rect = renderer.domElement.getBoundingClientRect()
+          const halfW = rect.width / 2
+          const halfH = rect.height / 2
+          tmpToTarget.copy(laserOriginOffset).applyQuaternion(player.group.quaternion).add(player.group.position)
+          tmpToTarget.project(camera)
+          const sx = halfW + tmpToTarget.x * halfW
+          const sy = halfH - tmpToTarget.y * halfH
+          const ex = halfW + aim.x * halfW
+          const ey = halfH + aim.y * halfH
+          hudLaserSvg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`)
+          hudLaserLine.setAttribute('x1', String(sx))
+          hudLaserLine.setAttribute('y1', String(sy))
+          hudLaserLine.setAttribute('x2', String(ex))
+          hudLaserLine.setAttribute('y2', String(ey))
+          hudLaserSvg.style.display = 'block'
+        } else {
+          laserSight.setVisible(true)
+          laserSight.update(player, targets)
+          if (hudLaserSvg) hudLaserSvg.style.display = 'none'
+        }
+      } else {
+        laserSight.setVisible(false)
+        if (hudLaserSvg) hudLaserSvg.style.display = 'none'
       }
 
       levelMesh.update(player.group.position)
@@ -337,6 +377,10 @@ export function initGame({
       } else if (wantsAutoFire && fireCooldown <= 0) {
         autoLock.fireAimedProjectile(autoFirePendingTarget)
         autoFirePendingTarget = null
+        fireCooldown = GAME_CONFIG.projectileCooldown
+      } else if (wantsFire && fireCooldown <= 0 && reticleTarget) {
+        // Crosshairs red = locked on target; fire is a guaranteed direct hit
+        autoLock.fireAimedProjectile(reticleTarget)
         fireCooldown = GAME_CONFIG.projectileCooldown
       } else {
         fireCooldown = tryFireProjectile({
