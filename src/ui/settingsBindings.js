@@ -18,7 +18,7 @@ export function bindSettingsUI({
   const {
     menuButton,
     toggleMouseButton,
-    toggleReticleMouseButton,
+    toggleCrosshairMouseButton,
     toggleTouchButton,
     toggleInstructionsButton,
     toggleInvertYButton,
@@ -55,14 +55,14 @@ export function bindSettingsUI({
     })
   }
 
-  // Reticle: Ship vs Mouse (crosshairs follow ship aim vs exact cursor)
-  if (toggleReticleMouseButton) {
+  // Crosshair: Ship vs Mouse (crosshairs follow ship aim vs exact cursor)
+  if (toggleCrosshairMouseButton) {
     const updateLabel = () => {
-      toggleReticleMouseButton.textContent = state.reticleFollowsMouse ? 'Reticle: Mouse' : 'Reticle: Ship'
+      toggleCrosshairMouseButton.textContent = state.crosshairFollowsMouse ? 'Crosshair: Mouse' : 'Crosshair: Ship'
     }
     updateLabel()
-    toggleReticleMouseButton.addEventListener('click', () => {
-      state.reticleFollowsMouse = !state.reticleFollowsMouse
+    toggleCrosshairMouseButton.addEventListener('click', () => {
+      state.crosshairFollowsMouse = !state.crosshairFollowsMouse
       updateLabel()
       emitSettings()
     })

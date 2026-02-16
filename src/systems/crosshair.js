@@ -1,16 +1,16 @@
 import * as THREE from 'three'
 import { GAME_CONFIG, laserOriginOffset } from '../config/constants.js'
 
-export function createReticleSystem(renderer, camera) {
-  const reticleDistance = GAME_CONFIG.reticleProjectionDistance
+export function createCrosshairSystem(renderer, camera) {
+  const crosshairDistance = GAME_CONFIG.crosshairProjectionDistance
   const tmpForward = new THREE.Vector3()
   const tmpPoint = new THREE.Vector3()
   const tmpNdc = new THREE.Vector3()
   const tmpTargetNdc = new THREE.Vector3()
   const tmpLaserOrigin = new THREE.Vector3()
 
-  return function updateReticle(reticleEl, player, targets = [], options = {}) {
-    if (!reticleEl) return null
+  return function updateCrosshair(crosshairEl, player, targets = [], options = {}) {
+    if (!crosshairEl) return null
 
     const rect = renderer.domElement.getBoundingClientRect()
     const halfW = rect.width / 2
@@ -31,31 +31,31 @@ export function createReticleSystem(renderer, camera) {
       yPx = opts.mouseAim.y * halfH
       xPx = THREE.MathUtils.clamp(xPx, -halfW + padding, halfW - padding)
       yPx = THREE.MathUtils.clamp(yPx, -halfH + padding, halfH - padding)
-      reticleEl.style.opacity = '1'
+      crosshairEl.style.opacity = '1'
     } else {
       tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
       tmpLaserOrigin.copy(laserOriginOffset).applyQuaternion(player.group.quaternion).add(player.group.position)
-      tmpPoint.copy(tmpLaserOrigin).addScaledVector(tmpForward, reticleDistance)
+      tmpPoint.copy(tmpLaserOrigin).addScaledVector(tmpForward, crosshairDistance)
       tmpNdc.copy(tmpPoint).project(camera)
 
       if (tmpNdc.z < -1 || tmpNdc.z > 1) {
-        reticleEl.style.opacity = '0'
-        reticleEl.classList.remove('reticle--lock')
+        crosshairEl.style.opacity = '0'
+        crosshairEl.classList.remove('crosshair--lock')
         return null
       }
 
-      reticleEl.style.opacity = '1'
+      crosshairEl.style.opacity = '1'
       xPx = tmpNdc.x * halfW
       yPx = -tmpNdc.y * halfH
       xPx = THREE.MathUtils.clamp(xPx, -halfW + padding, halfW - padding)
       yPx = THREE.MathUtils.clamp(yPx, -halfH + padding, halfH - padding)
     }
 
-    reticleEl.style.transform = `translate(calc(-50% + ${xPx}px), calc(-50% + ${yPx}px))`
+    crosshairEl.style.transform = `translate(calc(-50% + ${xPx}px), calc(-50% + ${yPx}px))`
 
     let hasLock = false
     let lockedTarget = null
-    const lockRadiusPx = GAME_CONFIG.reticleSize
+    const lockRadiusPx = GAME_CONFIG.crosshairSize
     let bestDistSq = lockRadiusPx * lockRadiusPx
     for (let i = 0; i < targets.length; i += 1) {
       const t = targets[i]
@@ -73,7 +73,7 @@ export function createReticleSystem(renderer, camera) {
         lockedTarget = t
       }
     }
-    reticleEl.classList.toggle('reticle--lock', hasLock)
+    crosshairEl.classList.toggle('crosshair--lock', hasLock)
     return lockedTarget
   }
 }

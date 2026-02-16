@@ -28,7 +28,7 @@
 - (Defer) **Shield restore**, **missile ammo**, **power-up tiers**.
 
 ### HUD (minimal)
-- **Reticle** (boresight / gunsight).
+- **Crosshair** (boresight / gunsight).
 - **Shield meter** (not required for earliest vertical slice).
 - **Missiles count** (when missiles exist).
 - **Score / combo** (simple).
@@ -42,7 +42,7 @@
 ### Input & platform specs (MVP)
 - **Keyboard**: WASD/Arrows steer; Space fire (current); Shift roll (later); Q/E brake/boost (later).
 - **Gamepad**: left stick steer; face button fire; shoulder buttons missiles/roll/boost (later).
-- **Mouse (optional)**: cursor aim/steer toggle; reticle is boresight (current design direction).
+- **Mouse (optional)**: cursor aim/steer toggle; crosshair is boresight (current design direction).
 - **Touch (later)**: two-thumb (left stick + right fire/charge) with big hit targets.
 
 ### Technical requirements (MVP)

@@ -1,9 +1,9 @@
 import * as THREE from 'three'
 import { GAME_CONFIG, laserOriginOffset } from '../config/constants.js'
 
-/** Laser sight: ray from nose to center crosshairs (reticle) or to first target within that distance; line, hit marker, target highlight. */
+/** Laser sight: ray from nose to center crosshairs or to first target within that distance; line, hit marker, target highlight. */
 export function createLaserSight(scene, options = {}) {
-  const maxLength = options.maxLength ?? GAME_CONFIG.reticleProjectionDistance
+  const maxLength = options.maxLength ?? GAME_CONFIG.crosshairProjectionDistance
   const tmpForward = new THREE.Vector3()
   const tmpOrigin = new THREE.Vector3()
   const tmpEnd = new THREE.Vector3()

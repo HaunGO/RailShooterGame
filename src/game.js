@@ -1,6 +1,6 @@
 /**
  * Orchestrates the game loop and subsystems. Creates core, entities, and systems;
- * runs input → flight → world wrap & spawns → reticle/laser/shadows → fire →
+ * runs input → flight → world wrap & spawns → crosshair/laser/shadows → fire →
  * projectiles & collisions → effects → camera & render.
  */
 import * as THREE from 'three'
@@ -14,7 +14,7 @@ import { createShadowsSystem } from './systems/shadows.js'
 import { createLaserSight } from './systems/laserSight.js'
 import { createFlightSystem } from './systems/flight.js'
 import { createAutoLockSystem } from './systems/autoLock.js'
-import { createReticleSystem } from './systems/reticle.js'
+import { createCrosshairSystem } from './systems/crosshair.js'
 import { attachTargetHitbox, updateTargets } from './systems/targets.js'
 import { tryFireProjectile, updateProjectiles } from './systems/projectiles.js'
 import { createEffectsSystem } from './systems/effects.js'
@@ -27,7 +27,7 @@ export function initGame({
   container,
   menuButton,
   toggleMouseButton,
-  toggleReticleMouseButton,
+  toggleCrosshairMouseButton,
   toggleTouchButton,
   toggleInstructionsButton,
   toggleInvertYButton,
@@ -64,7 +64,7 @@ export function initGame({
       return stored === 'auto' ? (prefersTouch ? 'stick' : 'off') : stored
     })(),
     settingsOpen: settingsPanel ? settingsPanel.dataset.open !== 'false' : true,
-    reticleFollowsMouse: resolvedSettings.reticleFollowsMouse ?? false,
+    crosshairFollowsMouse: resolvedSettings.crosshairFollowsMouse ?? resolvedSettings.reticleFollowsMouse ?? false,
     instructionsVisible: resolvedSettings.instructionsVisible ?? false,
     invertY: resolvedSettings.invertY ?? false,
     hitboxesEnabled: resolvedSettings.hitboxesEnabled ?? false,
@@ -129,11 +129,11 @@ export function initGame({
   const tmpSphereCenter = new THREE.Vector3()
   const tmpToTarget = new THREE.Vector3()
 
-  const reticleEl = document.querySelector('#reticle')
-  if (reticleEl) reticleEl.style.setProperty('--reticle-size', `${GAME_CONFIG.reticleSize}px`)
+  const crosshairEl = document.querySelector('#crosshair')
+  if (crosshairEl) crosshairEl.style.setProperty('--crosshair-size', `${GAME_CONFIG.crosshairSize}px`)
   const hudLaserSvg = document.querySelector('#hud-laser')
   const hudLaserLine = document.querySelector('#hud-laser-line')
-  const updateReticle = createReticleSystem(renderer, camera)
+  const updateCrosshair = createCrosshairSystem(renderer, camera)
   const effects = createEffectsSystem(scene)
   const scoreSystem = createScoreSystem(score ?? {})
   const flight = createFlightSystem({ player, bounds, minY })
@@ -204,7 +204,7 @@ export function initGame({
     onSettingsChange({
       mouseMode: state.mouseMode,
       touchMode: state.touchMode,
-      reticleFollowsMouse: state.reticleFollowsMouse,
+      crosshairFollowsMouse: state.crosshairFollowsMouse,
       instructionsVisible: state.instructionsVisible,
       invertY: state.invertY,
       hitboxesEnabled: state.hitboxesEnabled,
@@ -230,7 +230,7 @@ export function initGame({
     elements: {
       menuButton,
       toggleMouseButton,
-      toggleReticleMouseButton,
+      toggleCrosshairMouseButton,
       toggleTouchButton,
       toggleInstructionsButton,
       toggleInvertYButton,
@@ -284,7 +284,7 @@ export function initGame({
       flight.update(dt, inputState, tuningState, state.invertY)
 
       const followMouse =
-        Boolean(state.reticleFollowsMouse) && Boolean(usingMouseAim) && typeof aim?.x === 'number' && typeof aim?.y === 'number'
+        Boolean(state.crosshairFollowsMouse) && Boolean(usingMouseAim) && typeof aim?.x === 'number' && typeof aim?.y === 'number'
 
       const speedScale = inputState.boost.held
         ? GAME_CONFIG.boostMultiplier
@@ -318,15 +318,15 @@ export function initGame({
 
       playerHitTimer = Math.max(0, playerHitTimer - dt)
 
-      // Reticle, laser sight, level mesh, shadows
-      const reticleOptions = followMouse
+      // Crosshair, laser sight, level mesh, shadows
+      const crosshairOptions = followMouse
         ? { followMouse: true, mouseAim: { x: aim.x, y: aim.y } }
         : {}
-      const reticleTarget = updateReticle(reticleEl, player, targets, reticleOptions)
-      if (reticleTarget !== autoFireLockedTarget) {
-        autoFireLockedTarget = reticleTarget
-        autoFirePendingTarget = reticleTarget
-      } else if (!reticleTarget) {
+      const crosshairTarget = updateCrosshair(crosshairEl, player, targets, crosshairOptions)
+      if (crosshairTarget !== autoFireLockedTarget) {
+        autoFireLockedTarget = crosshairTarget
+        autoFirePendingTarget = crosshairTarget
+      } else if (!crosshairTarget) {
         autoFirePendingTarget = null
       }
       if (state.laserEnabled) {
@@ -363,7 +363,7 @@ export function initGame({
         shadows.updatePositions(playerShadow, player.group.position, targets, envState.floorY)
       }
 
-      // Fire: manual (space), instant laser (R), or auto-fire (reticle on target)
+      // Fire: manual (space), instant laser (R), or auto-fire (crosshair on target)
       fireCooldown = Math.max(0, fireCooldown - dt)
       const wantsFire = inputState.fire.pressed || inputState.fire.held
       const wantsAutoFire = state.autoFireEnabled && autoFirePendingTarget
@@ -378,9 +378,9 @@ export function initGame({
         autoLock.fireAimedProjectile(autoFirePendingTarget)
         autoFirePendingTarget = null
         fireCooldown = GAME_CONFIG.projectileCooldown
-      } else if (wantsFire && fireCooldown <= 0 && reticleTarget) {
+      } else if (wantsFire && fireCooldown <= 0 && crosshairTarget) {
         // Crosshairs red = locked on target; fire is a guaranteed direct hit
-        autoLock.fireAimedProjectile(reticleTarget)
+        autoLock.fireAimedProjectile(crosshairTarget)
         fireCooldown = GAME_CONFIG.projectileCooldown
       } else {
         fireCooldown = tryFireProjectile({

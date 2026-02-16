@@ -26,7 +26,7 @@ const loadSettings = () => {
     const migrated = {
       ...parsed,
       instantLaserEnabled: parsed.instantLaserEnabled ?? parsed.autoLockEnabled,
-      reticleFollowsMouse: parsed.reticleFollowsMouse ?? defaults.reticleFollowsMouse ?? false,
+      crosshairFollowsMouse: parsed.crosshairFollowsMouse ?? parsed.reticleFollowsMouse ?? defaults.crosshairFollowsMouse ?? false,
     }
     return mergeSettings(defaults, migrated)
   } catch (err) {
@@ -45,7 +45,7 @@ app.innerHTML = `
     <svg id="hud-laser" class="hud-laser" aria-hidden="true"><line id="hud-laser-line" x1="0" y1="0" x2="0" y2="0" /></svg>
   </div>
   <div id="hud">
-    <div id="reticle" aria-hidden="true"><span class="reticle-cross-h"></span><span class="reticle-cross-v"></span></div>
+    <div id="crosshair" aria-hidden="true"><span class="crosshair-cross-h"></span><span class="crosshair-cross-v"></span></div>
     <div id="debug"></div>
     <button id="menu-button" type="button" aria-label="Toggle settings">Menu</button>
     <div id="score-panel">
@@ -57,7 +57,7 @@ app.innerHTML = `
       <div id="debug-title">Settings</div>
       <div class="debug-buttons">
         <button id="toggle-mouse" type="button">Mouse Aim: Off</button>
-        <button id="toggle-reticle-mouse" type="button">Reticle: Ship</button>
+        <button id="toggle-crosshair-mouse" type="button">Crosshair: Ship</button>
         <button id="toggle-touch" type="button">Touch: Off</button>
         <button id="toggle-instructions" type="button">HUD Tips: On</button>
         <button id="toggle-invert-y" type="button">Invert Y: Off</button>
@@ -145,7 +145,7 @@ initGame({
   container: app,
   menuButton: document.querySelector('#menu-button'),
   toggleMouseButton: document.querySelector('#toggle-mouse'),
-  toggleReticleMouseButton: document.querySelector('#toggle-reticle-mouse'),
+  toggleCrosshairMouseButton: document.querySelector('#toggle-crosshair-mouse'),
   toggleTouchButton: document.querySelector('#toggle-touch'),
   toggleInstructionsButton: document.querySelector('#toggle-instructions'),
   toggleInvertYButton: document.querySelector('#toggle-invert-y'),

@@ -17,7 +17,7 @@
 
 ## Visuals & HUD
 - **Ship color**: deep pale royal blue.
-- **Reticle**: boresight projection (ship nose direction).
+- **Crosshair**: boresight projection (ship nose direction).
 - **Level mesh**: translucent grid plane + tinted plane at ship height, tiled forward; toggle on/off.
 - **Shadows**: fake circular shadows for ship/targets; toggle on/off (default on).
 - **HUD layout**: score at top center; instructions bottom right; settings panel top left.
@@ -38,7 +38,7 @@
 - `src/input.js`: input abstraction + mouse modes.
 - `src/entities.js`: player/target/projectile geometry.
 - `src/systems/`:
-  - `environment.js`, `reticle.js`, `targets.js`,
+  - `environment.js`, `crosshair.js`, `targets.js`,
   - `projectiles.js`, `collisions.js`, `effects.js`,
   - `score.js`.
 - `docs/ProjectBrief.md`, `docs/PRD.md`: planning artifacts.

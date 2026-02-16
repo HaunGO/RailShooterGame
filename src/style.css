@@ -152,13 +152,13 @@ canvas {
   stroke-width: 1.5;
 }
 
-#reticle {
-  --reticle-size: 18px;
+#crosshair {
+  --crosshair-size: 18px;
   position: absolute;
   left: 50%;
   top: 50%;
-  width: var(--reticle-size);
-  height: var(--reticle-size);
+  width: var(--crosshair-size);
+  height: var(--crosshair-size);
   transform: translate(-50%, -50%);
   border: 1px solid rgba(231, 238, 249, 0.6);
   border-radius: 50%;
@@ -169,27 +169,27 @@ canvas {
   z-index: 2;
 }
 
-#reticle .reticle-cross-h,
-#reticle .reticle-cross-v {
+#crosshair .crosshair-cross-h,
+#crosshair .crosshair-cross-v {
   position: absolute;
   background: rgba(231, 238, 249, 0.7);
 }
-#reticle .reticle-cross-h {
-  width: calc(var(--reticle-size) * 8 / 18);
+#crosshair .crosshair-cross-h {
+  width: calc(var(--crosshair-size) * 8 / 18);
   height: 1px;
-  left: calc((var(--reticle-size) - var(--reticle-size) * 8 / 18) / 2);
+  left: calc((var(--crosshair-size) - var(--crosshair-size) * 8 / 18) / 2);
 }
-#reticle .reticle-cross-v {
+#crosshair .crosshair-cross-v {
   width: 1px;
-  height: calc(var(--reticle-size) * 8 / 18);
-  top: calc((var(--reticle-size) - var(--reticle-size) * 8 / 18) / 2);
+  height: calc(var(--crosshair-size) * 8 / 18);
+  top: calc((var(--crosshair-size) - var(--crosshair-size) * 8 / 18) / 2);
 }
-#reticle.reticle--lock .reticle-cross-h,
-#reticle.reticle--lock .reticle-cross-v {
+#crosshair.crosshair--lock .crosshair-cross-h,
+#crosshair.crosshair--lock .crosshair-cross-v {
   background: rgba(255, 72, 72, 0.9);
 }
 
-#reticle.reticle--lock {
+#crosshair.crosshair--lock {
   border-color: rgba(255, 72, 72, 0.95);
   box-shadow: 0 0 8px rgba(255, 72, 72, 0.6);
 }

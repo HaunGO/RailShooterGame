@@ -22,10 +22,10 @@ export const GAME_CONFIG = {
   loopBlendInDuration: 0.35,
   loopBlendOutDuration: 0,
   autoLockAcquireDistance: 75,
-  /** Distance at which the reticle (center crosshairs) is drawn; laser sight is capped to this length. */
-  reticleProjectionDistance: 25,
-  /** Reticle (crosshairs) size in pixels; circle diameter and cross scale with this. */
-  reticleSize: 24,
+  /** Distance at which the crosshair (center crosshairs) is drawn; laser sight is capped to this length. */
+  crosshairProjectionDistance: 25,
+  /** Crosshair size in pixels; circle diameter and cross scale with this. */
+  crosshairSize: 24,
   laserMaxDistance: 120,
   levelWidth: 80,
 }
