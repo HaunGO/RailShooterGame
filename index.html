@@ -16,12 +16,15 @@
       (function () {
         var script = document.querySelector('script[type="module"]');
         if (!script) return;
-        var currentPath = (script.src && new URL(script.src).pathname) || '';
+        var scriptPath = (script.src && new URL(script.src).pathname) || '';
+        // only run deploy-check in production (built assets); skip in dev to avoid mobile reload issues
+        if (scriptPath.indexOf('/assets/') === -1) return;
+        var currentPath = scriptPath;
         function check() {
           fetch(window.location.pathname + '?t=' + Date.now(), { cache: 'no-store' })
             .then(function (r) { return r.text(); })
             .then(function (html) {
-              var m = html.match(/src="(\/assets\/[^"]+\.js)"/) || html.match(/src="(\/src\/main\.js)"/);
+              var m = html.match(/src="(\/assets\/[^"]+\.js)"/);
               var newPath = m ? m[1] : '';
               if (newPath && newPath !== currentPath) location.reload();
             })
