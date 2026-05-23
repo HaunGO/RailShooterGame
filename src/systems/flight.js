@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { GAME_CONFIG, loopForwardCarry } from '../config/constants.js'
+import { GAME_CONFIG } from '../config/constants.js'
 
 /** Player movement, barrel roll, and loop-the-loop. Updates position and rotation from input and tuning. */
 export function createFlightSystem({ player, bounds, minY }) {
@@ -40,10 +40,12 @@ export function createFlightSystem({ player, bounds, minY }) {
       barrelRollTimer > 0 && barrelRollDir !== 0
         ? tuningState.rollStrafeMultiplier * -barrelRollDir
         : 0
+    const forwardSpeed = tuningState.forwardSpeed ?? GAME_CONFIG.forwardSpeed
+    const loopForwardCarry = forwardSpeed * GAME_CONFIG.loopDuration
     shipVelocity.set(
       xInput * tuningState.speedX + rollStrafe * tuningState.speedX,
       yInput * tuningState.speedY,
-      GAME_CONFIG.forwardSpeed * speedScale
+      forwardSpeed * speedScale
     )
     player.group.position.x += shipVelocity.x * dt
     player.group.position.y += shipVelocity.y * dt
@@ -222,5 +224,10 @@ export function createFlightSystem({ player, bounds, minY }) {
     }
   }
 
-  return { update }
+  function getShipVelocity(out) {
+    out.copy(shipVelocity)
+    return out
+  }
+
+  return { update, getShipVelocity }
 }

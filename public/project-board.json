@@ -1,0 +1,127 @@
+{
+  "$schema": "RailShooter project-board v1",
+  "meta": {
+    "title": "Rail Shooter — project board",
+    "subtitle": "Edit this file to move work between columns. Open /dashboard.html with the dev server.",
+    "repoBase": "https://github.com/HaunGO/RailShooterGame/blob/main/",
+    "updated": "2026-04-11"
+  },
+  "links": [
+    { "label": "README", "path": "README.md" },
+    { "label": "Status", "path": "docs/Status.md" },
+    { "label": "PRD", "path": "docs/PRD.md" },
+    { "label": "Roadmap", "path": "docs/Roadmap.md" },
+    { "label": "BMAD context", "path": "_bmad-output/project-context.md" },
+    { "label": "PRD alignment", "path": "_bmad-output/planning-artifacts/prd-alignment-snapshot.md" },
+    { "label": "Story 1.1 — POV video", "path": "_bmad-output/implementation-artifacts/1-1-pov-video-environment.md" },
+    { "label": "Sprint status", "path": "_bmad-output/implementation-artifacts/sprint-status.yaml" },
+    { "label": "Epics", "path": "_bmad-output/planning-artifacts/epics.md" }
+  ],
+  "columns": [
+    {
+      "id": "backlog",
+      "title": "Backlog",
+      "hint": "Ideas and PRD-sized work not yet ready.",
+      "cards": [
+        {
+          "id": "touch-hud",
+          "title": "Touch controls + responsive HUD",
+          "notes": "Two-thumb layout; scale HUD for small screens.",
+          "tags": ["phase-1", "input"]
+        },
+        {
+          "id": "enemy-behaviors",
+          "title": "Enemy behaviors beyond drones",
+          "notes": "Strafe, turret, mid-boss patterns per PRD.",
+          "tags": ["phase-1", "gameplay"]
+        },
+        {
+          "id": "level-beats",
+          "title": "Level beats / pacing script",
+          "notes": "Scripted segments, breather, boss-shaped targets.",
+          "tags": ["phase-1", "content"]
+        },
+        {
+          "id": "camera-polish",
+          "title": "Camera smoothing + FOV kick",
+          "notes": "Optional polish after core level feels complete.",
+          "tags": ["phase-1", "feel"]
+        },
+        {
+          "id": "shield-ui",
+          "title": "Shield / health + damage UI",
+          "notes": "Deferred in PRD for earliest slice; add when loop needs it.",
+          "tags": ["phase-1", "hud"]
+        },
+        {
+          "id": "web-ship",
+          "title": "Ship web build (perf + host)",
+          "notes": "Production pass, static host, smoke production assets.",
+          "tags": ["phase-2", "release"]
+        },
+        {
+          "id": "app-store-shell",
+          "title": "App Store shell (e.g. Capacitor)",
+          "notes": "WKWebView, safe areas, TestFlight path.",
+          "tags": ["phase-3", "release"]
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "title": "Ready",
+      "hint": "Sized and clear; pick up next sprint.",
+      "cards": [
+        {
+          "id": "pov-video-environment",
+          "title": "POV video as flying environment (world / scene)",
+          "notes": "BMAD Path A: story **1-1-pov-video-environment** is ready-for-dev. Place iPhone export at `public/video/pov-sample.mp4` (see story). Next: **new Agent** → `bmad-dev-story` with `@_bmad-output/implementation-artifacts/1-1-pov-video-environment.md`.",
+          "tags": ["vision", "environment", "media", "phase-1", "bmad"]
+        },
+        {
+          "id": "game-js-refactor",
+          "title": "game.js thin orchestration",
+          "notes": "Follow docs/GameRefactorPlan.md incrementally.",
+          "tags": ["tech-debt", "architecture"]
+        }
+      ]
+    },
+    {
+      "id": "in_progress",
+      "title": "In progress",
+      "hint": "Limit WIP (e.g. 1–2 cards).",
+      "cards": []
+    },
+    {
+      "id": "done",
+      "title": "Done",
+      "hint": "Recently shipped or decided.",
+      "cards": [
+        {
+          "id": "baseline-mvp",
+          "title": "Vertical slice: rail + combat + HUD",
+          "notes": "See docs/Status.md for full list.",
+          "tags": ["phase-0"]
+        },
+        {
+          "id": "vite-tooling",
+          "title": "Vite config + dev stability",
+          "notes": "Port 1001, host, HMR off for mobile.",
+          "tags": ["tooling"]
+        },
+        {
+          "id": "bmad-install",
+          "title": "BMAD Method installed (core + BMM)",
+          "notes": "_bmad/, .cursor/skills, artifact folders.",
+          "tags": ["process", "bmad"]
+        },
+        {
+          "id": "brownfield-context",
+          "title": "Fast brownfield: project context + PRD snapshot",
+          "notes": "_bmad-output/project-context.md, planning-artifacts/prd-alignment-snapshot.md",
+          "tags": ["process", "bmad"]
+        }
+      ]
+    }
+  ]
+}

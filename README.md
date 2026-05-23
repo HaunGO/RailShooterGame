@@ -11,6 +11,8 @@ npm run dev
 
 Dev server settings live in [vite.config.js](vite.config.js) (default local URL uses port **1001**).
 
+**Project board (Kanban-style):** with the dev server running, open [http://localhost:1001/dashboard.html](http://localhost:1001/dashboard.html). Card data lives in [public/project-board.json](public/project-board.json) (edit the JSON and refresh; links open the GitHub file view).
+
 ```bash
 npm run build    # static output in dist/
 npm run preview  # local preview of production build

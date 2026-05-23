@@ -4,7 +4,13 @@
  * projectiles & collisions → effects → camera & render.
  */
 import * as THREE from 'three'
-import { GAME_CONFIG, shipHitSpheres, laserOriginOffset } from './config/constants.js'
+import {
+  GAME_CONFIG,
+  shipHitSpheres,
+  laserOriginOffset,
+  tunedProjectileSpeed,
+  WORLD_VIDEO_DOME_DEPTH,
+} from './config/constants.js'
 import { createCore } from './core/renderer.js'
 import { InputManager } from './input.js'
 import { createPlayer } from './entities.js'
@@ -19,6 +25,11 @@ import { attachTargetHitbox, updateTargets } from './systems/targets.js'
 import { tryFireProjectile, updateProjectiles } from './systems/projectiles.js'
 import { createEffectsSystem } from './systems/effects.js'
 import { createWingtipTrails } from './systems/wingtipTrails.js'
+import { createHypersonicFx } from './systems/hypersonicFx.js'
+import { createHypersonicState } from './systems/hypersonicState.js'
+import { createHypersonicHud } from './systems/hypersonicHud.js'
+import { unlockHypersonicAudio, playHypersonicTierUp } from './systems/hypersonicAudio.js'
+import { createHypersonicSpeedLines } from './systems/hypersonicSpeedLines.js'
 import { handleProjectileTargetCollisions, handleTargetShipCollisions } from './systems/collisions.js'
 import { createScoreSystem } from './systems/score.js'
 import { bindSettingsUI } from './ui/settingsBindings.js'
@@ -34,6 +45,9 @@ export function initGame({
   toggleHitboxesButton,
   toggleShadowsButton,
   toggleLevelMeshButton,
+  toggleRailButton,
+  toggleWorldVideoButton,
+  toggleWorldImmersionButton,
   toggleLaserButton,
   toggleAutoLockButton,
   toggleAutoFireButton,
@@ -48,6 +62,7 @@ export function initGame({
   touchLaser,
   touchRoll,
   tuning,
+  worldView,
   score,
 }) {
   const resolvedSettings = settings ?? {}
@@ -70,6 +85,9 @@ export function initGame({
     hitboxesEnabled: resolvedSettings.hitboxesEnabled ?? false,
     shadowsEnabled: resolvedSettings.shadowsEnabled ?? true,
     levelMeshEnabled: resolvedSettings.levelMeshEnabled ?? false,
+    railVisible: resolvedSettings.railVisible !== false,
+    worldVideoEnabled: resolvedSettings.worldVideoEnabled ?? false,
+    worldVideoImmersionEnabled: resolvedSettings.worldVideoImmersionEnabled ?? false,
     laserEnabled: resolvedSettings.laserEnabled ?? true,
     instantLaserEnabled: resolvedSettings.instantLaserEnabled ?? true,
     autoFireEnabled: resolvedSettings.autoFireEnabled ?? false,
@@ -86,10 +104,17 @@ export function initGame({
 
   const core = createCore(container, debugEl)
   if (!core) return
-  const { renderer, scene, camera } = core
+  const { renderer, scene, camera, canvas } = core
 
-  // Simple "fly through" floor segments for motion cues.
-  const envState = createEnvironment(scene)
+  // Simple "fly through" floor segments + optional POV world video backdrop.
+  const envState = createEnvironment(scene, {
+    camera,
+    initialWorldVideoEnabled: state.worldVideoEnabled,
+    initialWorldVideoImmersion: state.worldVideoImmersionEnabled,
+    initialWorldVideoDomeDepth:
+      resolvedSettings.tuning?.worldVideoDomeDepth ?? WORLD_VIDEO_DOME_DEPTH,
+    initialRailVisible: state.railVisible,
+  })
 
   const player = createPlayer()
   player.group.position.set(0, 0, 0)
@@ -107,11 +132,13 @@ export function initGame({
   const tuningState = {
     speedX: resolvedSettings.tuning?.speedX ?? GAME_CONFIG.baseSpeedX,
     speedY: resolvedSettings.tuning?.speedY ?? GAME_CONFIG.baseSpeedY,
+    forwardSpeed: resolvedSettings.tuning?.forwardSpeed ?? GAME_CONFIG.forwardSpeed,
     turnResponse: resolvedSettings.tuning?.turnResponse ?? 3.0,
     rollStrafeMultiplier:
       resolvedSettings.tuning?.rollStrafeMultiplier ?? GAME_CONFIG.baseRollStrafeMultiplier,
     camDistance: resolvedSettings.tuning?.camDistance ?? 10.0,
     camHeight: resolvedSettings.tuning?.camHeight ?? 1.8,
+    worldVideoDomeDepth: resolvedSettings.tuning?.worldVideoDomeDepth ?? WORLD_VIDEO_DOME_DEPTH,
   }
   const mouseIntensityRef = { value: resolvedSettings.tuning?.mouseIntensity ?? 6.0 }
   input.setMouseMode(state.mouseMode)
@@ -128,6 +155,8 @@ export function initGame({
   let playerHitTimer = 0
   const tmpSphereCenter = new THREE.Vector3()
   const tmpToTarget = new THREE.Vector3()
+  const tmpShipVel = new THREE.Vector3()
+  const tmpWorldFwd = new THREE.Vector3()
 
   const crosshairEl = document.querySelector('#crosshair')
   if (crosshairEl) crosshairEl.style.setProperty('--crosshair-size', `${GAME_CONFIG.crosshairSize}px`)
@@ -136,6 +165,19 @@ export function initGame({
   const updateCrosshair = createCrosshairSystem(renderer, camera)
   const effects = createEffectsSystem(scene)
   const scoreSystem = createScoreSystem(score ?? {})
+  const hypersonicVignette = document.querySelector('#hypersonic-vignette')
+  const hypersonicState = createHypersonicState()
+  const hypersonicHud = createHypersonicHud({
+    root: document.querySelector('#hypersonic-hud'),
+    heatFill: document.querySelector('#hypersonic-heat-fill'),
+    tierEl: document.querySelector('#hypersonic-tier'),
+    streakEl: document.querySelector('#hypersonic-streak'),
+  })
+  const hypersonicFx = createHypersonicFx({ canvas, camera, vignetteEl: hypersonicVignette })
+  const hypersonicSpeedLines = createHypersonicSpeedLines(document.querySelector('#hypersonic-speed-lines'))
+  const unlockAudioOnce = () => unlockHypersonicAudio()
+  container.addEventListener('pointerdown', unlockAudioOnce, { once: true })
+  window.addEventListener('keydown', unlockAudioOnce, { once: true })
   const flight = createFlightSystem({ player, bounds, minY })
   const autoLock = createAutoLockSystem({
     targetsRef: targets,
@@ -210,6 +252,9 @@ export function initGame({
       hitboxesEnabled: state.hitboxesEnabled,
       shadowsEnabled: state.shadowsEnabled,
       levelMeshEnabled: state.levelMeshEnabled,
+      railVisible: state.railVisible,
+      worldVideoEnabled: state.worldVideoEnabled,
+      worldVideoImmersionEnabled: state.worldVideoImmersionEnabled,
       laserEnabled: state.laserEnabled,
       instantLaserEnabled: state.instantLaserEnabled,
       autoFireEnabled: state.autoFireEnabled,
@@ -217,11 +262,13 @@ export function initGame({
       tuning: {
         speedX: tuningState.speedX,
         speedY: tuningState.speedY,
+        forwardSpeed: tuningState.forwardSpeed,
         turnResponse: tuningState.turnResponse,
         rollStrafeMultiplier: tuningState.rollStrafeMultiplier,
         mouseIntensity: mouseIntensityRef.value,
         camDistance: tuningState.camDistance,
         camHeight: tuningState.camHeight,
+        worldVideoDomeDepth: tuningState.worldVideoDomeDepth,
       },
     })
   }
@@ -237,6 +284,9 @@ export function initGame({
       toggleHitboxesButton,
       toggleShadowsButton,
       toggleLevelMeshButton,
+      toggleRailButton,
+      toggleWorldVideoButton,
+      toggleWorldImmersionButton,
       toggleLaserButton,
       toggleAutoLockButton,
       toggleAutoFireButton,
@@ -245,6 +295,7 @@ export function initGame({
       instructionsEl,
       touchControls,
       tuning,
+      worldView: worldView ?? {},
     },
     state,
     tuningState,
@@ -261,6 +312,18 @@ export function initGame({
     },
     onLevelMeshChange: (enabled) => {
       levelMesh.setVisible(enabled)
+    },
+    onRailChange: (enabled) => {
+      envState.setRailVisible(enabled)
+    },
+    onWorldVideoChange: (enabled) => {
+      envState.setWorldVideoEnabled(enabled)
+    },
+    onWorldImmersionChange: (enabled) => {
+      envState.setWorldVideoImmersion(enabled)
+    },
+    onWorldVideoDomeDepthChange: (depth) => {
+      envState.setWorldVideoDomeDepth(depth)
     },
     onLaserChange: (enabled) => {
       laserSight.setEnabled(enabled)
@@ -291,10 +354,29 @@ export function initGame({
         : inputState.brake.held
           ? GAME_CONFIG.brakeMultiplier
           : 1
-      wingtipTrails.update(dt, player, speedScale)
+      const projectileSpeed = tunedProjectileSpeed(tuningState.forwardSpeed)
+      flight.getShipVelocity(tmpShipVel)
+      tmpWorldFwd.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
+      const speedAlongForward = tmpShipVel.dot(tmpWorldFwd)
+      const h = hypersonicState.update(dt, {
+        boostHeld: inputState.boost.held,
+        speedAlongForward,
+        projectileSpeed,
+      })
+      scoreSystem.syncHypersonicFrame({ raw: h.raw, heat: h.heat, tier: h.tier })
+      if (h.tierUp && h.tier >= 1) playHypersonicTierUp(h.tier)
+      hypersonicFx.update(h, dt)
+      hypersonicSpeedLines.update(h)
+      hypersonicHud.update(h)
+      wingtipTrails.update(dt, player, speedScale, h.fxBlend ?? h.blend, h.tier)
 
       // World wrap (floor segments)
       updateEnvironment(envState, player.group.position.z)
+      envState.updateWorldVideo(camera, {
+        speedBoostHeld: inputState.boost.held,
+        hypersonicBlend: h.fxBlend ?? h.blend,
+        hypersonicTier: h.tier,
+      })
 
       // Spawn & auto-lock state
       targetSpawnTimer = updateTargets({
@@ -368,27 +450,32 @@ export function initGame({
       const wantsFire = inputState.fire.pressed || inputState.fire.held
       const wantsAutoFire = state.autoFireEnabled && autoFirePendingTarget
       const wantsAutoLock = inputState.laser.held
+      const projectileCooldownEffective =
+        GAME_CONFIG.projectileCooldown *
+        (h.raw && h.tier >= 1 ? GAME_CONFIG.hypersonicFireCooldownFactor : 1)
       if (state.instantLaserEnabled && wantsAutoLock && fireCooldown <= 0) {
         const target = autoLock.getCurrentAutoLockTarget()
         if (target) {
           autoLock.resolveAutoLockHit(target)
-          fireCooldown = GAME_CONFIG.projectileCooldown
+          fireCooldown = projectileCooldownEffective
         }
       } else if (wantsAutoFire && fireCooldown <= 0) {
-        autoLock.fireAimedProjectile(autoFirePendingTarget)
+        autoLock.fireAimedProjectile(autoFirePendingTarget, projectileSpeed)
         autoFirePendingTarget = null
-        fireCooldown = GAME_CONFIG.projectileCooldown
+        fireCooldown = projectileCooldownEffective
       } else if (wantsFire && fireCooldown <= 0 && crosshairTarget) {
         // Crosshairs red = locked on target; fire is a guaranteed direct hit
-        autoLock.fireAimedProjectile(crosshairTarget)
-        fireCooldown = GAME_CONFIG.projectileCooldown
+        autoLock.fireAimedProjectile(crosshairTarget, projectileSpeed)
+        fireCooldown = projectileCooldownEffective
       } else {
         fireCooldown = tryFireProjectile({
           state: inputState,
           fireCooldown,
-          projectileCooldown: GAME_CONFIG.projectileCooldown,
-          projectileSpeed: GAME_CONFIG.projectileSpeed,
+          projectileCooldown: projectileCooldownEffective,
+          projectileSpeed,
           player,
+          camera,
+          screenAim: followMouse ? aim : null,
           projectiles,
           scene,
           onFire: (proj) => {
@@ -404,7 +491,7 @@ export function initGame({
         scene,
         dt,
         playerZ: player.group.position.z,
-        projectileSpeed: GAME_CONFIG.projectileSpeed,
+        projectileSpeed,
         onMiss: (projectile) => {
           const shotId = projectile?.shotId
           if (typeof shotId !== 'number') {

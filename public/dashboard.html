@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rail Shooter — project board</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f1218;
+        --panel: #171c26;
+        --border: #2a3344;
+        --text: #e8ecf4;
+        --muted: #9aa7bc;
+        --accent: #6ea8fe;
+        --tag: #2d3a52;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.45;
+        min-height: 100vh;
+      }
+      header {
+        padding: 1.25rem 1.5rem 1rem;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, #141922 0%, var(--bg) 100%);
+      }
+      header h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.35rem;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+        max-width: 52rem;
+      }
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        margin-top: 0.75rem;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 0.75rem;
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+      }
+      .links a {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 0.85rem;
+      }
+      .links a:hover {
+        text-decoration: underline;
+      }
+      .board {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 0.75rem;
+        padding: 1rem 1.5rem 2rem;
+        align-items: start;
+      }
+      .column {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+      }
+      .column header {
+        padding: 0.65rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        border-radius: 10px 10px 0 0;
+        background: #1a2130;
+      }
+      .column header h2 {
+        margin: 0;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+      .column header .hint {
+        margin: 0.35rem 0 0;
+        font-size: 0.72rem;
+        color: var(--muted);
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: 0;
+        line-height: 1.35;
+      }
+      .cards {
+        padding: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .empty {
+        color: var(--muted);
+        font-size: 0.8rem;
+        padding: 0.5rem 0.35rem 0.75rem;
+        text-align: center;
+      }
+      .card {
+        background: #121722;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.55rem 0.65rem 0.6rem;
+      }
+      .card h3 {
+        margin: 0 0 0.35rem;
+        font-size: 0.92rem;
+        font-weight: 600;
+      }
+      .card p {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        margin-top: 0.45rem;
+      }
+      .tag {
+        font-size: 0.65rem;
+        padding: 0.12rem 0.4rem;
+        border-radius: 999px;
+        background: var(--tag);
+        color: #c5d0e8;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      footer {
+        padding: 0.75rem 1.5rem 1.5rem;
+        font-size: 0.75rem;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+      }
+      .err {
+        margin: 1rem 1.5rem;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        background: #36191c;
+        border: 1px solid #5c2a32;
+        color: #f2c0c6;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="title">Project board</h1>
+      <p id="subtitle"></p>
+      <div class="meta-row">
+        <span id="updated"></span>
+        <span id="wip"></span>
+      </div>
+    </header>
+    <nav class="links" id="links" hidden></nav>
+    <div id="error" class="err" hidden></div>
+    <main class="board" id="board"></main>
+    <footer>
+      Edit <code>public/project-board.json</code>, refresh this page. For drag-and-drop or assignees, move to GitHub Projects / Linear later; this board is intentionally plain and repo-local.
+    </footer>
+    <script>
+      function showError(msg) {
+        var el = document.getElementById('error')
+        el.textContent = msg
+        el.hidden = false
+      }
+
+      function repoUrl(meta, path) {
+        var base = (meta && meta.repoBase) || ''
+        return base + path.replace(/^\/+/, '')
+      }
+
+      function render(data) {
+        var meta = data.meta || {}
+        document.getElementById('title').textContent = meta.title || 'Project board'
+        document.getElementById('subtitle').textContent = meta.subtitle || ''
+        document.getElementById('updated').textContent = meta.updated ? 'Board data updated: ' + meta.updated : ''
+
+        var linkNav = document.getElementById('links')
+        var links = data.links || []
+        if (links.length) {
+          linkNav.hidden = false
+          linkNav.innerHTML = links
+            .map(function (l) {
+              var href = repoUrl(meta, l.path)
+              return '<a href="' + href + '" target="_blank" rel="noopener">' + (l.label || l.path) + '</a>'
+            })
+            .join('')
+        }
+
+        var columns = data.columns || []
+        var wip = 0
+        var board = document.getElementById('board')
+        board.innerHTML = columns
+          .map(function (col) {
+            var cards = col.cards || []
+            if (col.id === 'in_progress') wip = cards.length
+            var inner =
+              cards.length === 0
+                ? '<div class="empty">No cards</div>'
+                : '<div class="cards">' +
+                  cards
+                    .map(function (c) {
+                      var tags = (c.tags || [])
+                        .map(function (t) {
+                          return '<span class="tag">' + t + '</span>'
+                        })
+                        .join('')
+                      return (
+                        '<article class="card" data-id="' +
+                        (c.id || '') +
+                        '"><h3>' +
+                        (c.title || '') +
+                        '</h3>' +
+                        (c.notes ? '<p>' + c.notes + '</p>' : '') +
+                        (tags ? '<div class="tags">' + tags + '</div>' : '') +
+                        '</article>'
+                      )
+                    })
+                    .join('') +
+                  '</div>'
+            return (
+              '<section class="column" data-column="' +
+              (col.id || '') +
+              '"><header><h2>' +
+              (col.title || col.id) +
+              '</h2>' +
+              (col.hint ? '<p class="hint">' + col.hint + '</p>' : '') +
+              '</header>' +
+              inner +
+              '</section>'
+            )
+          })
+          .join('')
+
+        document.getElementById('wip').textContent =
+          wip > 0 ? 'In progress cards: ' + wip : 'In progress: none (good time to pull from Ready)'
+      }
+
+      fetch('./project-board.json', { cache: 'no-store' })
+        .then(function (r) {
+          if (!r.ok) throw new Error('Could not load project-board.json (' + r.status + ')')
+          return r.json()
+        })
+        .then(render)
+        .catch(function (e) {
+          showError(e.message || String(e))
+        })
+    </script>
+  </body>
+</html>

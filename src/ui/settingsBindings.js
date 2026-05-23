@@ -1,7 +1,28 @@
 /**
  * Wires all settings toggles and tuning sliders to DOM and callbacks.
  * Does not own game logic; mutates provided state and calls emitSettings / optional callbacks.
+ *
+ * HUD toggles use `.hud-toggle__state` for the value column; emojis in `.hud-toggle__ico` are decorative (`aria-hidden`).
  */
+
+function hudStateEl(btn) {
+  return btn?.querySelector?.('.hud-toggle__state') ?? null
+}
+
+function setHudStateText(btn, text) {
+  const el = hudStateEl(btn)
+  if (el) el.textContent = text
+}
+
+/** Binary On/Off toggles: updates state pill, `aria-pressed`, and `aria-label`. */
+function setHudBinary(btn, name, isOn, onText = 'On', offText = 'Off') {
+  if (!btn) return
+  const shown = isOn ? onText : offText
+  setHudStateText(btn, shown)
+  btn.setAttribute('aria-pressed', isOn ? 'true' : 'false')
+  btn.setAttribute('aria-label', `${name}, ${shown}`)
+}
+
 export function bindSettingsUI({
   elements,
   state,
@@ -12,6 +33,10 @@ export function bindSettingsUI({
   onHitboxesChange,
   onShadowsChange,
   onLevelMeshChange,
+  onRailChange,
+  onWorldVideoChange,
+  onWorldImmersionChange,
+  onWorldVideoDomeDepthChange,
   onLaserChange,
   debugEl,
 }) {
@@ -25,6 +50,9 @@ export function bindSettingsUI({
     toggleHitboxesButton,
     toggleShadowsButton,
     toggleLevelMeshButton,
+    toggleRailButton,
+    toggleWorldVideoButton,
+    toggleWorldImmersionButton,
     toggleLaserButton,
     toggleAutoLockButton,
     toggleAutoFireButton,
@@ -32,6 +60,7 @@ export function bindSettingsUI({
     settingsPanel,
     instructionsEl,
     touchControls,
+    worldView,
   } = elements
 
   const updateTouchControls = () => {
@@ -44,7 +73,8 @@ export function bindSettingsUI({
   // Mouse
   if (toggleMouseButton) {
     const updateLabel = () => {
-      toggleMouseButton.textContent = state.mouseMode === 'off' ? 'Mouse Aim: Off' : 'Mouse Aim: On'
+      const on = state.mouseMode !== 'off'
+      setHudBinary(toggleMouseButton, 'Mouse aim', on)
     }
     updateLabel()
     toggleMouseButton.addEventListener('click', () => {
@@ -55,10 +85,15 @@ export function bindSettingsUI({
     })
   }
 
-  // Crosshair: Ship vs Mouse (crosshairs follow ship aim vs exact cursor)
+  // Crosshair: Ship vs Mouse
   if (toggleCrosshairMouseButton) {
     const updateLabel = () => {
-      toggleCrosshairMouseButton.textContent = state.crosshairFollowsMouse ? 'Crosshair: Mouse' : 'Crosshair: Ship'
+      const mouse = Boolean(state.crosshairFollowsMouse)
+      setHudStateText(toggleCrosshairMouseButton, mouse ? 'Mouse' : 'Ship')
+      toggleCrosshairMouseButton.setAttribute(
+        'aria-label',
+        mouse ? 'Crosshair follows cursor' : 'Crosshair follows ship aim'
+      )
     }
     updateLabel()
     toggleCrosshairMouseButton.addEventListener('click', () => {
@@ -68,16 +103,13 @@ export function bindSettingsUI({
     })
   }
 
-  // Touch
+  // Touch (tri-state)
   if (toggleTouchButton) {
     const updateLabel = () => {
-      const label =
-        state.touchMode === 'off'
-          ? 'Touch: Off'
-          : state.touchMode === 'drag'
-            ? 'Touch: Drag'
-            : 'Touch: Stick'
-      toggleTouchButton.textContent = label
+      const t = state.touchMode
+      const label = t === 'off' ? 'Off' : t === 'drag' ? 'Drag' : 'Stick'
+      setHudStateText(toggleTouchButton, label)
+      toggleTouchButton.setAttribute('aria-label', `Touch controls, ${label.toLowerCase()}`)
     }
     updateTouchControls()
     updateLabel()
@@ -94,7 +126,13 @@ export function bindSettingsUI({
   // Menu
   if (menuButton) {
     const updateMenuLabel = () => {
-      menuButton.textContent = state.settingsOpen ? 'Close' : 'Menu'
+      const open = state.settingsOpen
+      menuButton.setAttribute('aria-expanded', open ? 'true' : 'false')
+      menuButton.setAttribute('aria-label', open ? 'Close HUD settings' : 'Open HUD settings')
+      const label = menuButton.querySelector('.hud-menu-btn__label')
+      const ico = menuButton.querySelector('.hud-menu-btn__ico')
+      if (label) label.textContent = open ? 'Close' : 'HUD'
+      if (ico) ico.textContent = open ? '' : '⚙'
     }
     updateSettingsPanel()
     updateMenuLabel()
@@ -105,11 +143,11 @@ export function bindSettingsUI({
     })
   }
 
-  // Instructions / HUD Tips
+  // Tips
   if (toggleInstructionsButton) {
     const updateInstructions = () => {
       if (instructionsEl) instructionsEl.style.display = state.instructionsVisible ? 'block' : 'none'
-      toggleInstructionsButton.textContent = state.instructionsVisible ? 'HUD Tips: On' : 'HUD Tips: Off'
+      setHudBinary(toggleInstructionsButton, 'Control tips on screen', state.instructionsVisible)
     }
     updateInstructions()
     toggleInstructionsButton.addEventListener('click', () => {
@@ -122,7 +160,7 @@ export function bindSettingsUI({
   // Invert Y
   if (toggleInvertYButton) {
     const updateLabel = () => {
-      toggleInvertYButton.textContent = state.invertY ? 'Invert Y: On' : 'Invert Y: Off'
+      setHudBinary(toggleInvertYButton, 'Invert vertical steering', state.invertY)
     }
     updateLabel()
     toggleInvertYButton.addEventListener('click', () => {
@@ -135,7 +173,7 @@ export function bindSettingsUI({
   // Hitboxes
   if (toggleHitboxesButton) {
     const updateLabel = () => {
-      toggleHitboxesButton.textContent = state.hitboxesEnabled ? 'Hitboxes: On' : 'Hitboxes: Off'
+      setHudBinary(toggleHitboxesButton, 'Show hitboxes', state.hitboxesEnabled)
     }
     updateLabel()
     toggleHitboxesButton.addEventListener('click', () => {
@@ -149,7 +187,7 @@ export function bindSettingsUI({
   // Shadows
   if (toggleShadowsButton) {
     const updateLabel = () => {
-      toggleShadowsButton.textContent = state.shadowsEnabled ? 'Shadows: On' : 'Shadows: Off'
+      setHudBinary(toggleShadowsButton, 'Ship and target shadows', state.shadowsEnabled)
     }
     updateLabel()
     toggleShadowsButton.addEventListener('click', () => {
@@ -163,7 +201,7 @@ export function bindSettingsUI({
   // Level mesh
   if (toggleLevelMeshButton) {
     const updateLabel = () => {
-      toggleLevelMeshButton.textContent = state.levelMeshEnabled ? 'Level Mesh: On' : 'Level Mesh: Off'
+      setHudBinary(toggleLevelMeshButton, 'Level grid mesh', state.levelMeshEnabled)
     }
     updateLabel()
     toggleLevelMeshButton.addEventListener('click', () => {
@@ -174,10 +212,56 @@ export function bindSettingsUI({
     })
   }
 
+  // Rail path (scrolling track surface)
+  if (toggleRailButton) {
+    const updateLabel = () => {
+      setHudBinary(toggleRailButton, 'Rail path surface', state.railVisible)
+    }
+    updateLabel()
+    toggleRailButton.addEventListener('click', () => {
+      state.railVisible = !state.railVisible
+      if (onRailChange) onRailChange(state.railVisible)
+      updateLabel()
+      emitSettings()
+    })
+  }
+
+  // World video
+  if (toggleWorldVideoButton) {
+    const updateLabel = () => {
+      setHudBinary(toggleWorldVideoButton, 'World POV video backdrop', state.worldVideoEnabled)
+    }
+    updateLabel()
+    toggleWorldVideoButton.addEventListener('click', () => {
+      state.worldVideoEnabled = !state.worldVideoEnabled
+      if (onWorldVideoChange) onWorldVideoChange(state.worldVideoEnabled)
+      updateLabel()
+      emitSettings()
+    })
+  }
+
+  // World view — inner dome (concave POV billboard)
+  if (toggleWorldImmersionButton) {
+    const updateLabel = () => {
+      setHudBinary(
+        toggleWorldImmersionButton,
+        'POV inner dome',
+        state.worldVideoImmersionEnabled
+      )
+    }
+    updateLabel()
+    toggleWorldImmersionButton.addEventListener('click', () => {
+      state.worldVideoImmersionEnabled = !state.worldVideoImmersionEnabled
+      if (onWorldImmersionChange) onWorldImmersionChange(state.worldVideoImmersionEnabled)
+      updateLabel()
+      emitSettings()
+    })
+  }
+
   // Laser
   if (toggleLaserButton) {
     const updateLabel = () => {
-      toggleLaserButton.textContent = state.laserEnabled ? 'Laser Sight: On' : 'Laser Sight: Off'
+      setHudBinary(toggleLaserButton, 'Laser sight line', state.laserEnabled)
     }
     updateLabel()
     toggleLaserButton.addEventListener('click', () => {
@@ -191,7 +275,7 @@ export function bindSettingsUI({
   // Instant Laser
   if (toggleAutoLockButton) {
     const updateLabel = () => {
-      toggleAutoLockButton.textContent = state.instantLaserEnabled ? 'Instant Laser: On' : 'Instant Laser: Off'
+      setHudBinary(toggleAutoLockButton, 'Instant laser on R', state.instantLaserEnabled)
     }
     updateLabel()
     toggleAutoLockButton.addEventListener('click', () => {
@@ -204,7 +288,7 @@ export function bindSettingsUI({
   // Auto fire
   if (toggleAutoFireButton) {
     const updateLabel = () => {
-      toggleAutoFireButton.textContent = state.autoFireEnabled ? 'Auto Fire: On' : 'Auto Fire: Off'
+      setHudBinary(toggleAutoFireButton, 'Auto fire when locked', state.autoFireEnabled)
     }
     updateLabel()
     toggleAutoFireButton.addEventListener('click', () => {
@@ -217,7 +301,7 @@ export function bindSettingsUI({
   // Debug
   if (toggleDebugButton && debugEl) {
     const updateLabel = () => {
-      toggleDebugButton.textContent = state.debugEnabled ? 'Debug: On' : 'Debug: Off'
+      setHudBinary(toggleDebugButton, 'Debug stats overlay', state.debugEnabled)
       debugEl.style.display = state.debugEnabled ? 'block' : 'none'
       if (state.debugEnabled) debugEl.textContent = 'starting…'
     }
@@ -227,6 +311,21 @@ export function bindSettingsUI({
       updateLabel()
       emitSettings()
     })
+  }
+
+  // World view — dome depth (POV inner bowl, local Z)
+  if (worldView?.domeDepth) {
+    const format = (v) => String(Math.round(v))
+    const sync = () => {
+      const value = Number(worldView.domeDepth.value)
+      tuningState.worldVideoDomeDepth = value
+      if (worldView.domeDepthVal) worldView.domeDepthVal.textContent = format(value)
+      if (onWorldVideoDomeDepthChange) onWorldVideoDomeDepthChange(value)
+      emitSettings()
+    }
+    worldView.domeDepth.value = String(tuningState.worldVideoDomeDepth ?? 0)
+    worldView.domeDepth.addEventListener('input', sync)
+    sync()
   }
 
   // Tuning sliders
@@ -246,6 +345,7 @@ export function bindSettingsUI({
     sync()
   }
 
+  bindSlider('forwardSpeed', tuning.forwardSpeed, tuning.forwardSpeedVal)
   bindSlider('speedX', tuning.speedX, tuning.speedXVal)
   bindSlider('speedY', tuning.speedY, tuning.speedYVal)
   bindSlider('turnResponse', tuning.turnResponse, tuning.turnResponseVal)

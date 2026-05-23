@@ -1,4 +1,5 @@
 {
+  "forward-speed": "Forward speed along the rail when not boosting or braking (Q/E still scale from this). Bullet speed scales with this setting; boost still adds ship speed only, so you can outrun your shots along the rail.",
   "toggle-mouse": "Enable mouse aiming relative to screen center.",
   "toggle-crosshair-mouse": "Crosshair: Ship = crosshairs follow ship aim. Crosshair: Mouse = crosshairs follow exact cursor (Mouse Aim must be On).",
   "toggle-touch": "Cycle touch controls: Off, Stick, Drag.",
@@ -7,6 +8,10 @@
   "toggle-hitboxes": "Show target and ship hitboxes.",
   "toggle-shadows": "Toggle fake circular shadows.",
   "toggle-levelmesh": "Show the grid/plane level mesh.",
+  "toggle-rail": "Show the scrolling rail path (ground strips). Future: curves, hills, live updates. Hides only the mesh—flight bounds stay the same.",
+  "toggle-world-video": "Full-frame POV backdrop (cover crop) parented to the camera — see public/video/pov-sample.mp4. Off = classic sky color only.",
+  "toggle-world-immersion": "Enables the inner bowl on the POV screen. With Dome + zoom up, the backdrop also moves closer and scales past the edges of the view for a more wraparound feel.",
+  "world-dome-depth": "With Inner dome on: stronger bowl, moves the POV screen closer (zoom), and scales past the view so edges wrap more. Slider 0–500 (500 = full zoom + bowl). 0 = flat at normal distance.",
   "toggle-laser": "Toggle the laser sight line.",
   "toggle-auto-lock": "Hold R to lock and fire an instant laser at the closest target.",
   "toggle-auto-fire": "Auto-fire a single bolt when crosshair locks.",

@@ -40,3 +40,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Raw camera exports (keep .mp4 for the game; re-convert locally if needed)
+public/video/*.mov
+public/video/*.MOV

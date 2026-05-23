@@ -94,12 +94,12 @@ export function createAutoLockSystem({
     currentAutoLockTarget = null
   }
 
-  function fireAimedProjectile(target) {
+  function fireAimedProjectile(target, projectileSpeed = GAME_CONFIG.projectileSpeed) {
     const proj = createProjectile(false)
     proj.mesh.position.copy(laserOriginOffset).applyQuaternion(player.group.quaternion).add(player.group.position)
     tmpForward.set(0, 0, 1).applyQuaternion(player.group.quaternion).normalize()
     tmpToTarget.copy(target.mesh.position).sub(proj.mesh.position).normalize()
-    proj.velocity = tmpToTarget.clone().multiplyScalar(GAME_CONFIG.projectileSpeed)
+    proj.velocity = tmpToTarget.clone().multiplyScalar(projectileSpeed)
     scene.add(proj.mesh)
     projectilesRef.push(proj)
     if (onFireAimed) onFireAimed(proj)

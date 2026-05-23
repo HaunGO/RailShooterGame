@@ -18,6 +18,7 @@
 ## Visuals & HUD
 - **Ship color**: deep pale royal blue.
 - **Crosshair**: boresight projection (ship nose direction).
+- **World video**: optional POV backdrop from `public/video/pov-sample.mp4` (`worldVideoEnabled`, **World video** in Settings) — camera-local frustum fill + **cover** UVs (`src/systems/worldVideoLayout.js`).
 - **Level mesh**: translucent grid plane + tinted plane at ship height, tiled forward; toggle on/off.
 - **Shadows**: fake circular shadows for ship/targets; toggle on/off (default on).
 - **HUD layout**: score at top center; instructions bottom right; settings panel top left.
@@ -44,8 +45,9 @@
 - `docs/ProjectBrief.md`, `docs/PRD.md`: planning artifacts.
 
 ## Current Network Access
-- Dev server running with `--host`.
-- Latest known network URL: `http://10.0.0.138:5176/` (may change if restarted).
+- Dev server: `npm run dev` — see [vite.config.js](../vite.config.js) (default port **1001**, `--host` enabled in config).
+- **Project board:** [http://localhost:1001/dashboard.html](http://localhost:1001/dashboard.html) (Kanban-style view; data in [public/project-board.json](../public/project-board.json)).
+- LAN URL is printed by Vite (e.g. `http://<your-LAN-IP>:1001/`); it changes with your network interface.
 
 ## Known TODO / Next Steps
 - Mobile-friendly touch controls (two‑thumb layout) and responsive HUD scaling.

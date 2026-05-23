@@ -1,6 +1,5 @@
 import * as THREE from 'three'
-
-const CLEAR_COLOR = 0x0b1020
+import { SCENE_CLEAR_COLOR } from '../config/constants.js'
 
 /** Creates WebGLRenderer, sets size/pixel ratio/clear color, appends canvas to container. Returns null on failure. */
 export function createRenderer(container, debugEl = null) {
@@ -22,7 +21,7 @@ export function createRenderer(container, debugEl = null) {
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.outputColorSpace = THREE.SRGBColorSpace
-  renderer.setClearColor(CLEAR_COLOR, 1)
+  renderer.setClearColor(SCENE_CLEAR_COLOR, 1)
   const canvas = renderer.domElement
   canvas.style.position = 'absolute'
   canvas.style.left = '0'
@@ -39,7 +38,7 @@ export function createRenderer(container, debugEl = null) {
 /** Creates scene with default background color. */
 export function createScene() {
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(CLEAR_COLOR)
+  scene.background = new THREE.Color(SCENE_CLEAR_COLOR)
   return scene
 }
 
@@ -63,6 +62,8 @@ export function createCore(container, debugEl = null) {
   const { renderer, canvas } = rendererResult
   const scene = createScene()
   const camera = createCamera()
+  // Camera must live in the scene graph so children (e.g. world video backdrop) are rendered.
+  scene.add(camera)
 
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.6)
   keyLight.position.set(6, 10, -6)
